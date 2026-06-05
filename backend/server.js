@@ -21,7 +21,9 @@ app.use('/api', reviewRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', documentacaoRoutes);
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Backend rodando em http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => console.log(`Backend rodando em http://localhost:${PORT}`));
+}
+
+module.exports = app;
