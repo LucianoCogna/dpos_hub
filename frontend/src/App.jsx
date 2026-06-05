@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import cognaLogo from './images/cogna-light.svg';
 import Planning from './views/Planning';
 import Review from './views/Review';
 import Report from './views/Report';
@@ -37,7 +38,7 @@ export default function App() {
         <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="/src/images/cogna-light.svg" alt="Cogna" className="h-8 w-auto dark:invert" />
+              <img src={cognaLogo} alt="Cogna" className="h-8 w-auto dark:invert" />
             </div>
             <nav className="flex gap-1">
               {NAV.map(({ to, label }) => (
