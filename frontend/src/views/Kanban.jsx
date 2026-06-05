@@ -235,6 +235,7 @@ export default function Kanban() {
         >
           <option value="">Todos os projetos</option>
           <option value="DAPL">DAPL</option>
+          <option value="DCOD">DCOD</option>
           <option value="DDPL">DDPL</option>
           <option value="DENA">DENA</option>
         </select>
