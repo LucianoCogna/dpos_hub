@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+@media print {
+  header, nav, .no-print { display: none !important; }
+  body { background: white !important; color: black !important; font-size: 13px; }
+  main { padding: 0 !important; max-width: 100% !important; }
+  .report-root { background: white !important; color: black !important;
+    margin: 0 !important; padding: 0 !important; }
+  .report-block { border: 1px solid #e5e7eb !important; background: white !important;
+    break-inside: avoid; margin-bottom: 16px; }
+  .report-block-header { background: #f9fafb !important; color: black !important; }
+  .report-block-body { color: black !important; }
+  .progress-track { background: #e5e7eb !important; }
+  a { color: #8629ff !important; }
+}
