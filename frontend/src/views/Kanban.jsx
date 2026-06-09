@@ -31,6 +31,15 @@ function MultiSelect({ options, selected, onChange, placeholder }) {
       </button>
       {open && (
         <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1">
+          <label className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-gray-700 mb-1">
+            <input
+              type="checkbox"
+              checked={selected.length === 0}
+              onChange={() => onChange([])}
+              className="accent-primary-600"
+            />
+            Todos os projetos
+          </label>
           {options.map((opt) => (
             <label key={opt} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm text-gray-700 dark:text-gray-200">
               <input
@@ -42,14 +51,6 @@ function MultiSelect({ options, selected, onChange, placeholder }) {
               {opt}
             </label>
           ))}
-          {selected.length > 0 && (
-            <button
-              onClick={() => onChange([])}
-              className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:text-red-500 border-t border-gray-100 dark:border-gray-700 mt-1"
-            >
-              Limpar seleção
-            </button>
-          )}
         </div>
       )}
     </div>
