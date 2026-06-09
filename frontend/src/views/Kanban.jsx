@@ -15,7 +15,6 @@ const STATUSES = [
   'Bloqueado',
   'Concluído',
   'Aceito',
-  'Cancelado',
 ];
 
 const TYPE_CONFIG = {
