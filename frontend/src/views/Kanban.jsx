@@ -115,6 +115,7 @@ export default function Kanban() {
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterProject, setFilterProject] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [selectedIssue, setSelectedIssue] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [transitioning, setTransitioning] = useState(null);
@@ -176,7 +177,8 @@ export default function Kanban() {
   const filtered = epics
     .filter((e) => !filterAssignee || e.assignee === filterAssignee)
     .filter((e) => !filterType     || e.type === filterType)
-    .filter((e) => !filterProject  || getProject(e.key) === filterProject);
+    .filter((e) => !filterProject  || getProject(e.key) === filterProject)
+    .filter((e) => !filterStatus   || e.status === filterStatus);
 
   const byStatus = STATUSES.reduce((acc, s) => {
     acc[s] = filtered.filter((e) => e.status === s);
@@ -237,6 +239,17 @@ export default function Kanban() {
           <option value="DCOD">DCOD</option>
           <option value="DDPL">DDPL</option>
           <option value="DENA">DENA</option>
+        </select>
+
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="">Todos os status</option>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
         </select>
 
         <span className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} itens</span>
