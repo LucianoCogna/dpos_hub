@@ -1,9 +1,60 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import StatusBadge from '../components/StatusBadge';
 import KanbanIssueModal from '../components/KanbanIssueModal';
 import { getMacroprocessos, transitionIssue } from '../services/api';
 
 const JIRA_BASE = 'https://cogna.atlassian.net';
+
+function MultiSelect({ options, selected, onChange, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const toggle = (opt) =>
+    onChange(selected.includes(opt) ? selected.filter((s) => s !== opt) : [...selected, opt]);
+
+  const label = selected.length === 0 ? placeholder : selected.join(', ');
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[160px] justify-between"
+      >
+        <span className={selected.length ? 'text-primary-600 dark:text-primary-400 font-medium' : ''}>{label}</span>
+        <span className="text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1">
+          {options.map((opt) => (
+            <label key={opt} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                checked={selected.includes(opt)}
+                onChange={() => toggle(opt)}
+                className="accent-primary-600"
+              />
+              {opt}
+            </label>
+          ))}
+          {selected.length > 0 && (
+            <button
+              onClick={() => onChange([])}
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:text-red-500 border-t border-gray-100 dark:border-gray-700 mt-1"
+            >
+              Limpar seleção
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STATUSES = [
   'Funil',
@@ -114,7 +165,7 @@ export default function Kanban() {
   const [loading, setLoading] = useState(false);
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterType, setFilterType] = useState('');
-  const [filterProject, setFilterProject] = useState('');
+  const [filterProjects, setFilterProjects] = useState([]);
   const [filterStatus, setFilterStatus] = useState('');
   const [selectedIssue, setSelectedIssue] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
@@ -177,7 +228,7 @@ export default function Kanban() {
   const filtered = epics
     .filter((e) => !filterAssignee || e.assignee === filterAssignee)
     .filter((e) => !filterType     || e.type === filterType)
-    .filter((e) => !filterProject  || getProject(e.key) === filterProject)
+    .filter((e) => filterProjects.length === 0 || filterProjects.includes(getProject(e.key)))
     .filter((e) => !filterStatus   || e.status === filterStatus);
 
   const byStatus = STATUSES.reduce((acc, s) => {
@@ -229,17 +280,12 @@ export default function Kanban() {
           <option value="story">📋 Apenas Histórias</option>
         </select>
 
-        <select
-          value={filterProject}
-          onChange={(e) => setFilterProject(e.target.value)}
-          className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-        >
-          <option value="">Todos os projetos</option>
-          <option value="DAPL">DAPL</option>
-          <option value="DCOD">DCOD</option>
-          <option value="DDPL">DDPL</option>
-          <option value="DENA">DENA</option>
-        </select>
+        <MultiSelect
+          options={['DAPL', 'DCOD', 'DDPL', 'DENA']}
+          selected={filterProjects}
+          onChange={setFilterProjects}
+          placeholder="Todos os projetos"
+        />
 
         <select
           value={filterStatus}
