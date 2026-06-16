@@ -50,8 +50,11 @@ export const getIssueTransitions = (key) => api.get(`/jira/issue/${key}/transiti
 export const updateIssue         = (key, data) => api.put(`/jira/issue/${key}/update`, data).then((r) => r.data);
 
 // Status Report (PDF-style)
-export const getStatusReport = (area = 'G&C') =>
-  api.get(`/status-report?area=${encodeURIComponent(area)}`).then((r) => r.data);
+export const getStatusReport = (area = 'G&C', sprint = null) => {
+  const params = new URLSearchParams({ area });
+  if (sprint) params.set('sprint', sprint);
+  return api.get(`/status-report?${params}`).then((r) => r.data);
+};
 
 // Documentação
 export const getDocumentacao = (sprintId) => api.get(`/documentacao/${sprintId}`).then((r) => r.data);

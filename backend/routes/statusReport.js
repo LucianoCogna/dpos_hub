@@ -317,7 +317,10 @@ router.get('/status-report', async (req, res) => {
     if (!config) return res.status(400).json({ error: `Área inválida: ${areaKey}` });
 
     const today = new Date();
-    const currentSprint = deriveCurrentSprint(today);
+    const sprintOverride = req.query.sprint;
+    const currentSprint = (sprintOverride && SPRINT_ORDER.includes(sprintOverride))
+      ? sprintOverride
+      : deriveCurrentSprint(today);
     const nextSp = nextSprint(currentSprint);
 
     const [sprintEnd] = SPRINTS[currentSprint] ? [SPRINTS[currentSprint][1]] : [null];
