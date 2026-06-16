@@ -49,6 +49,10 @@ export const getProjectMembers   = () => api.get('/jira/project-members').then((
 export const getIssueTransitions = (key) => api.get(`/jira/issue/${key}/transitions`).then((r) => r.data);
 export const updateIssue         = (key, data) => api.put(`/jira/issue/${key}/update`, data).then((r) => r.data);
 
+// Status Report (PDF-style)
+export const getStatusReport = (area = 'G&C') =>
+  api.get(`/status-report?area=${encodeURIComponent(area)}`).then((r) => r.data);
+
 // Documentação
 export const getDocumentacao = (sprintId) => api.get(`/documentacao/${sprintId}`).then((r) => r.data);
 export const gerarDocumentacao = (sprintId) => api.post(`/documentacao/${sprintId}/gerar`).then((r) => r.data);

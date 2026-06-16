@@ -6,6 +6,7 @@ const sprintRoutes = require('./routes/sprint');
 const reviewRoutes = require('./routes/review');
 const reportRoutes = require('./routes/report');
 const documentacaoRoutes = require('./routes/documentacao');
+const statusReportRoutes = require('./routes/statusReport');
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use('/api', sprintRoutes);
 app.use('/api', reviewRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', documentacaoRoutes);
+app.use('/api', statusReportRoutes);
 
 if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 3001;

@@ -7,6 +7,7 @@ import Report from './views/Report';
 import Documentacao from './views/Documentacao';
 import Indicadores from './views/Indicadores';
 import Kanban from './views/Kanban';
+import StatusReport from './views/StatusReport';
 import ChatButton from './components/ChatButton';
 
 const NAV = [
@@ -16,6 +17,7 @@ const NAV = [
   { to: '/indicadores',  label: 'Indicadores'  },
   { to: '/report',       label: 'Report'       },
   { to: '/documentacao', label: 'Documentação' },
+  { to: '/status-report', label: 'Status Report' },
 ];
 
 export default function App() {
@@ -75,7 +77,8 @@ export default function App() {
             <Route path="/review"   element={<Review />}   />
             <Route path="/indicadores"  element={<Indicadores />} />
             <Route path="/report"       element={<Report />}       />
-            <Route path="/documentacao" element={<Documentacao />} />
+            <Route path="/documentacao"  element={<Documentacao />} />
+            <Route path="/status-report" element={<StatusReport />} />
           </Routes>
         </main>
       </div>
