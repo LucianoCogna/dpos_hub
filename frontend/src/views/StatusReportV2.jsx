@@ -1014,6 +1014,18 @@ export default function StatusReportV2() {
   const downloadPdf = async () => {
     if (!pdfRef.current || !data) return;
     setPdfLoading(true);
+
+    const el = pdfRef.current;
+    // Move para viewport (browser só pinta o que está na tela)
+    // O overlay de loading cobre o elemento durante a captura
+    el.style.position = 'fixed';
+    el.style.left     = '0px';
+    el.style.top      = '0px';
+    el.style.zIndex   = '-1'; // atrás do overlay
+
+    // Aguarda 2 frames para o browser pintar antes de capturar
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
     try {
       await html2pdf().set({
         margin: [12, 10, 12, 10],
@@ -1022,8 +1034,13 @@ export default function StatusReportV2() {
         html2canvas: { scale:2, useCORS:true, logging:false, windowWidth:1060, width:1060, allowTaint:true },
         jsPDF: { unit:'mm', format:'a4', orientation:'landscape' },
         pagebreak: { mode:'css', before:'.pdf-break' },
-      }).from(pdfRef.current).save();
-    } finally { setPdfLoading(false); }
+      }).from(el).save();
+    } finally {
+      // Devolve para fora da tela
+      el.style.left   = '-2200px';
+      el.style.zIndex = '';
+      setPdfLoading(false);
+    }
   };
 
   const toggleGantt = (key) => setGanttFilters((f) => ({ ...f, [key]:!f[key] }));
@@ -1109,6 +1126,19 @@ export default function StatusReportV2() {
   return (
     <div style={{ minHeight:'100vh',background:T.pageBg,margin:'-32px -24px',padding:'28px 28px 48px',fontFamily:"'Inter','Helvetica Neue',Helvetica,Arial,sans-serif",color:T.textPrim }}>
       <style>{STYLES}</style>
+
+      {/* Overlay durante geração de PDF */}
+      {pdfLoading && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(248,245,255,0.94)',
+          zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center',
+          backdropFilter:'blur(6px)', WebkitBackdropFilter:'blur(6px)' }}>
+          <div style={{ textAlign:'center', color:T.purple }}>
+            <div className="sr2-spin" style={{ fontSize:36, marginBottom:14, display:'inline-block' }}>⏳</div>
+            <div style={{ fontWeight:800, fontSize:16, marginBottom:4 }}>Gerando PDF…</div>
+            <div style={{ fontSize:12, color:T.textMut }}>Aguarde um momento</div>
+          </div>
+        </div>
+      )}
 
       {/* Modo apresentação */}
       {presentation && data && (
