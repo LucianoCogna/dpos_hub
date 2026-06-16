@@ -106,17 +106,22 @@ function getHeaders() {
   return { Authorization: `Basic ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
 }
 
-async function fetchAll(jql, fields) {
+async function fetchAll(jql, fields, maxPages = 20) {
   const url = `${process.env.JIRA_BASE_URL}/rest/api/3/search/jql`;
   const issues = [];
   let nextPageToken;
-  while (true) {
+  let page = 0;
+  while (page < maxPages) {
     const payload = { jql, fields, maxResults: 100 };
     if (nextPageToken) payload.nextPageToken = nextPageToken;
-    const { data } = await axios.post(url, payload, { headers: getHeaders() });
-    issues.push(...data.issues);
-    if (data.isLast || !data.nextPageToken || data.issues.length === 0) break;
+    const { data } = await axios.post(url, payload, {
+      headers: getHeaders(),
+      timeout: 20000,
+    });
+    issues.push(...(data.issues || []));
+    if (data.isLast || !data.nextPageToken || (data.issues || []).length === 0) break;
     nextPageToken = data.nextPageToken;
+    page++;
   }
   return issues;
 }
@@ -317,20 +322,32 @@ router.get('/status-report', async (req, res) => {
 
     const [sprintEnd] = SPRINTS[currentSprint] ? [SPRINTS[currentSprint][1]] : [null];
 
-    // Fetch DAPL
-    const daplJql = `labels = "${config.label}" AND issuetype in (Epic, "História (M)", História, Story) ORDER BY key ASC`;
-    const daplIssues = await fetchAll(daplJql, DAPL_FIELDS);
+    // Fetch DAPL — épicos + histórias separados para garantir compatibilidade de tipo
+    const [epicIssues, storyIssues] = await Promise.all([
+      fetchAll(`labels = "${config.label}" AND issuetype = Epic ORDER BY key ASC`, DAPL_FIELDS).catch(() => []),
+      fetchAll(`labels = "${config.label}" AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`, DAPL_FIELDS).catch(() => []),
+    ]);
+    const daplIssues = [...epicIssues, ...storyIssues];
     const items = daplIssues.map(mapDaplItem);
 
-    // Fetch incidents (se área tiver DENA)
+    // Fetch incidents (se área tiver DENA) — não bloqueia se falhar
     let incidents = [];
     if (config.page3 && config.denaEpic) {
-      const incJql = `project = DENA AND issuetype = Incidente AND "Epic Link" = ${config.denaEpic} ORDER BY created DESC`;
       try {
-        const incIssues = await fetchAll(incJql, INCIDENT_FIELDS);
+        // Tenta com parent primeiro; fallback para "Epic Link" legado
+        let incIssues = [];
+        for (const jql of [
+          `project = DENA AND issuetype = Incidente AND parent = ${config.denaEpic} ORDER BY created DESC`,
+          `project = DENA AND issuetype = Incidente AND "Epic Link" = ${config.denaEpic} ORDER BY created DESC`,
+        ]) {
+          try {
+            incIssues = await fetchAll(jql, INCIDENT_FIELDS, 5);
+            if (incIssues.length > 0) break;
+          } catch (_) { /* tenta próximo */ }
+        }
         incidents = incIssues.map(mapIncident);
       } catch (e) {
-        console.warn('Falha ao buscar incidentes:', e.message);
+        console.warn('Falha ao buscar incidentes DENA:', e.message);
       }
     }
 

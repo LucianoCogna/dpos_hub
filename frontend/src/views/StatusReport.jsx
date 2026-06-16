@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import html2pdf from 'html2pdf.js';
 import { getStatusReport } from '../services/api';
 
 // ── Brand Cogna ──────────────────────────────────────────────────────────────
@@ -589,6 +590,28 @@ export default function StatusReport() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const reportRef = useRef(null);
+
+  const downloadPdf = async () => {
+    if (!reportRef.current) return;
+    setPdfLoading(true);
+    try {
+      await html2pdf()
+        .set({
+          margin: 0,
+          filename: `Status_Report_${area}_${data?.today?.replace(/-/g, '') || 'export'}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+          pagebreak: { mode: ['css', 'legacy'], before: '.status-page' },
+        })
+        .from(reportRef.current)
+        .save();
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   const load = async (a) => {
     setLoading(true);
@@ -626,12 +649,14 @@ export default function StatusReport() {
           }}>
           {loading ? '⏳ Carregando…' : '🔄 Atualizar'}
         </button>
-        <button onClick={() => window.print()}
+        <button onClick={downloadPdf} disabled={!data || pdfLoading}
           style={{
             background: 'white', color: C.dark, border: `1px solid ${C.gray}`,
-            borderRadius: 6, padding: '6px 14px', fontSize: 13, cursor: 'pointer',
+            borderRadius: 6, padding: '6px 14px', fontSize: 13,
+            cursor: !data || pdfLoading ? 'not-allowed' : 'pointer',
+            opacity: !data || pdfLoading ? 0.6 : 1,
           }}>
-          🖨️ PDF
+          {pdfLoading ? '⏳ Gerando PDF…' : '⬇️ Baixar PDF'}
         </button>
         {data && (
           <span style={{ fontSize: 12, color: C.grayMid }}>
@@ -653,7 +678,7 @@ export default function StatusReport() {
       )}
 
       {data && (
-        <>
+        <div ref={reportRef}>
           {/* ══ PÁGINA 1 — Sprint Atual + Próxima ══ */}
           <PageWrapper pageNum={1}>
             {/* Sidebar */}
@@ -863,7 +888,7 @@ export default function StatusReport() {
               </PageContent>
             </PageWrapper>
           )}
-        </>
+        </div>
       )}
 
       <style>{`
