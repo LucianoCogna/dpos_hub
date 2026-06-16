@@ -699,6 +699,271 @@ function IncidentTable({ incidents, currentSprint }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PDF-safe card (sem backdrop-filter nem rgba)
+// ─────────────────────────────────────────────────────────────────────────────
+function PC({ children, style = {} }) {
+  return (
+    <div style={{
+      background:'#ffffff', border:'1.5px solid #e0d8f0', borderRadius:14,
+      boxShadow:'0 2px 8px rgba(82,25,161,0.07)', overflow:'hidden', ...style,
+    }}>{children}</div>
+  );
+}
+
+function PdfRow({ item, accent, badge, badgeColor }) {
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 10px',
+      marginBottom:3, borderRadius:8, borderLeft:`3px solid ${accent||T.purpleMid}`,
+      background:'rgba(82,25,161,0.02)' }}>
+      <span style={{ color:T.purpleMid, fontWeight:800, fontSize:10, flexShrink:0, minWidth:64 }}>{item.key}</span>
+      <span style={{ color:T.textSec, fontSize:11, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.summary}</span>
+      {badge && (
+        <span style={{ background:`${badgeColor||T.purpleMid}18`, color:badgeColor||T.purpleMid, border:`1px solid ${badgeColor||T.purpleMid}30`,
+          borderRadius:20, padding:'2px 9px', fontSize:10, fontWeight:700, whiteSpace:'nowrap', flexShrink:0 }}>{badge}</span>
+      )}
+    </div>
+  );
+}
+
+function PdfSprintBlock({ title, color, items_data, sprintsCalendar, currentSprint }) {
+  const cal = sprintsCalendar?.[currentSprint];
+  return (
+    <div style={{ flex:1, minWidth:0 }}>
+      <div style={{ background:`linear-gradient(135deg,${color},${color}cc)`, padding:'10px 14px', borderRadius:'14px 14px 0 0' }}>
+        <span style={{ color:'#fff', fontWeight:800, fontSize:13 }}>{title}</span>
+      </div>
+      <PC style={{ borderRadius:'0 0 14px 14px', padding:'12px 14px' }}>
+        {items_data.map(({ sectionTitle, items, kind, color:c }) => (
+          <div key={sectionTitle} style={{ marginBottom:12 }}>
+            <div style={{ fontSize:9.5, fontWeight:700, color:T.textMut, letterSpacing:1.1, textTransform:'uppercase', marginBottom:5 }}>
+              {sectionTitle} · {items.length}
+            </div>
+            {items.length === 0
+              ? <div style={{ color:T.textMut, fontSize:10, fontStyle:'italic', padding:'2px 10px' }}>Nenhum item</div>
+              : items.map((it) => {
+                  let badge, badgeColor, accent;
+                  if (kind==='upstream')      { badge=cal?`até ${fmtDate(cal.end)}`:'UP'; badgeColor=T.purpleMid; accent=T.yellow; }
+                  else if (kind==='downstream') { badge=it.end?fmtDate(it.end):'DN'; badgeColor=T.purpleMid; accent=T.purpleMid; }
+                  else if (kind==='homolog')  { const d=it._dias_homolog; badge=d!=null?(d>15?`⚠ ${d}d`:`${d}d`):'Hom.'; badgeColor=d>15?T.red:T.orange; accent=T.orange; }
+                  else if (kind==='done')     { badge=it.implant?fmtFull(it.implant):'✓'; badgeColor=T.green; accent=T.green; }
+                  else if (kind==='next_homolog') { badge='Hom.'; badgeColor=T.orange; accent=T.orange; }
+                  return <PdfRow key={it.key+kind} item={it} accent={accent} badge={badge} badgeColor={badgeColor} />;
+                })
+            }
+          </div>
+        ))}
+      </PC>
+    </div>
+  );
+}
+
+function PdfStatChip({ label, value, color }) {
+  return (
+    <div style={{ flex:1, background:'#ffffff', border:`1.5px solid ${color}30`, borderRadius:12,
+      padding:'11px 13px', position:'relative', overflow:'hidden', minWidth:110 }}>
+      <div style={{ fontSize:9, color:T.textMut, fontWeight:700, letterSpacing:1.1, textTransform:'uppercase', marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:30, fontWeight:900, color, lineHeight:1 }}>{value}</div>
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${color},${color}44)` }} />
+    </div>
+  );
+}
+
+function PdfContainer({ pdfRef, data, area, ganttFilters }) {
+  const { classification:cls, current_sprint, next_sprint, today,
+    sprints_calendar, sprint_order, pi_metrics,
+    incidents, incidents_summary, incidents_by_sprint, has_incidents_page } = data;
+
+  return (
+    <div ref={pdfRef} style={{
+      position:'fixed', left:'-2200px', top:0,
+      width:1060, background:'#f8f5ff',
+      fontFamily:"Inter,'Helvetica Neue',Helvetica,Arial,sans-serif",
+      color:T.textPrim, fontSize:11,
+    }}>
+      {/* ── Estilos para page-break ── */}
+      <style>{`.pdf-break{page-break-before:always;}`}</style>
+
+      {/* ════════════════════════════════════════════
+          PÁGINA 1 — Sprint Atual
+      ════════════════════════════════════════════ */}
+      <div style={{ padding:'20px 24px 24px', background:'#f8f5ff' }}>
+
+        {/* Header */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+          marginBottom:16, paddingBottom:12, borderBottom:`2.5px solid ${T.purple}` }}>
+          <div>
+            <div style={{ fontSize:22, fontWeight:900, color:T.purple, lineHeight:1 }}>Status Report V2</div>
+            <div style={{ fontSize:11, color:T.textMut, marginTop:3 }}>{area} · Gerado em {today}</div>
+          </div>
+          <div style={{ fontSize:15, fontWeight:800, color:'#fff', background:`linear-gradient(135deg,${T.purple},${T.purpleMid})`,
+            padding:'8px 20px', borderRadius:10 }}>Sprint {current_sprint}</div>
+        </div>
+
+        {/* Stat chips */}
+        <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+          <PdfStatChip label="Upstream"    value={cls.current_upstream.length+cls.next_upstream.length}     color={T.yellow}    />
+          <PdfStatChip label="Downstream"  value={cls.current_downstream.length+cls.next_downstream.length} color={T.purpleMid} />
+          <PdfStatChip label="Homologação" value={cls.current_homolog.length}                               color={T.orange}    />
+          <PdfStatChip label="Entregues"   value={cls.current_done.length}                                  color={T.green}     />
+          {has_incidents_page && <PdfStatChip label="Incidentes" value={incidents_summary.total} color={T.red} />}
+        </div>
+
+        {/* Sprint columns */}
+        <div style={{ display:'flex', gap:14, marginBottom:14 }}>
+          <PdfSprintBlock
+            title={`⚡ Sprint Atual — ${current_sprint}`} color={T.purple}
+            sprintsCalendar={sprints_calendar} currentSprint={current_sprint}
+            items_data={[
+              {sectionTitle:'Upstream',    items:cls.current_upstream,   kind:'upstream',      color:T.yellow},
+              {sectionTitle:'Downstream',  items:cls.current_downstream, kind:'downstream',    color:T.purpleMid},
+              {sectionTitle:'Homologação', items:cls.current_homolog,    kind:'homolog',       color:T.orange},
+              {sectionTitle:'Concluídos',  items:cls.current_done,       kind:'done',          color:T.green},
+            ]}
+          />
+          <PdfSprintBlock
+            title={`🔮 Próxima Sprint — ${next_sprint}`} color={T.purpleMid}
+            sprintsCalendar={sprints_calendar} currentSprint={current_sprint}
+            items_data={[
+              {sectionTitle:'Upstream',       items:cls.next_upstream,   kind:'upstream',    color:T.yellow},
+              {sectionTitle:'Downstream',     items:cls.next_downstream, kind:'downstream',  color:T.purpleMid},
+              {sectionTitle:'Hom. Prevista',  items:cls.next_homolog,    kind:'next_homolog',color:T.orange},
+            ]}
+          />
+        </div>
+
+        {/* Calendar strip */}
+        {(() => {
+          const visible = ['26.2.4','26.2.5','26.2.6','26.3.1','26.3.2','26.3.3','26.3.4','26.3.5','26.3.6'].filter((sp) => sprints_calendar[sp]);
+          return (
+            <PC style={{ padding:'12px 16px' }}>
+              <div style={{ fontSize:9.5, fontWeight:700, color:T.textMut, letterSpacing:1.2, textTransform:'uppercase', marginBottom:8 }}>Calendário PI 26.2 → 26.3</div>
+              <div style={{ display:'flex', gap:4 }}>
+                {visible.map((sp) => {
+                  const isCur=sp===current_sprint, isNxt=sp===next_sprint, cal=sprints_calendar[sp], col=sp.slice(0,4)==='26.2'?T.purple:T.purpleMid;
+                  return (
+                    <div key={sp} style={{ flex:1, borderRadius:9, padding:'7px 3px', textAlign:'center',
+                      background:isCur?`linear-gradient(135deg,${T.purple},${T.purpleMid})`:isNxt?T.yellowLight:T.purpleLight,
+                      border:isCur?'none':`1.5px solid ${isNxt?T.yellow+'44':col+'20'}` }}>
+                      <div style={{ fontSize:9, fontWeight:800, color:isCur?'#fff':isNxt?T.yellow:col }}>{sp}</div>
+                      {cal && <div style={{ fontSize:7.5, color:isCur?'rgba(255,255,255,.65)':T.textMut, marginTop:1 }}>{fmtDate(cal.start)}-{fmtDate(cal.end)}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </PC>
+          );
+        })()}
+      </div>
+
+      {/* ════════════════════════════════════════════
+          PÁGINA 2 — Cronograma / Gantt
+      ════════════════════════════════════════════ */}
+      <div className="pdf-break" style={{ padding:'20px 24px', background:'#f8f5ff' }}>
+
+        <div style={{ fontSize:18, fontWeight:900, color:T.purple, marginBottom:14, paddingBottom:10, borderBottom:`2px solid ${T.purple}` }}>
+          📈 Cronograma
+        </div>
+
+        <div style={{ display:'flex', gap:14 }}>
+          {/* PI sidebar */}
+          <div style={{ width:190, flexShrink:0 }}>
+            {['26.1','26.2','26.3','26.4'].map((pi) => {
+              const piColors = { '26.1':T.textMut, '26.2':T.purple, '26.3':T.purpleMid, '26.4':'#9B59B6' };
+              const [ent,plan] = pi_metrics?.[pi]||[0,0];
+              const pct = plan>0?Math.min(100,Math.round((ent/plan)*100)):(ent>0?100:0);
+              return (
+                <PC key={pi} style={{ padding:'12px 14px', marginBottom:8 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                    <span style={{ color:T.textSec, fontSize:12, fontWeight:700 }}>PI {pi}</span>
+                    <span style={{ color:piColors[pi], fontWeight:800, fontSize:13 }}>{pi==='26.1'?`${ent}`:`${ent}/${plan}`}</span>
+                  </div>
+                  <div style={{ height:6, background:`${piColors[pi]}20`, borderRadius:6, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${pct}%`, background:`linear-gradient(90deg,${piColors[pi]}cc,${piColors[pi]})`, borderRadius:6 }} />
+                  </div>
+                  {pi!=='26.1'&&<div style={{ fontSize:9.5, color:T.textMut, marginTop:4 }}>{pct}% entregue</div>}
+                </PC>
+              );
+            })}
+          </div>
+
+          {/* Gantt */}
+          <PC style={{ flex:1, padding:16 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:T.textPrim, marginBottom:12 }}>Épicos Ativos e Backlog Planejado</div>
+            <ModernGantt
+              items={cls.gantt_full}
+              sprintsCalendar={sprints_calendar}
+              sprintOrder={sprint_order}
+              currentSprint={current_sprint}
+              nextSprint={next_sprint}
+              today={today}
+              filters={ganttFilters}
+            />
+          </PC>
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════
+          PÁGINA 3 — Incidentes (se houver)
+      ════════════════════════════════════════════ */}
+      {has_incidents_page && (
+        <div className="pdf-break" style={{ padding:'20px 24px', background:'#f8f5ff' }}>
+          <div style={{ fontSize:18, fontWeight:900, color:T.red, marginBottom:14, paddingBottom:10, borderBottom:`2px solid ${T.red}` }}>
+            🚨 Incidentes
+          </div>
+
+          <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+            <PdfStatChip label="Total Sprint"  value={incidents_summary.total}       color={T.textSec} />
+            <PdfStatChip label="Em Aberto"     value={incidents_summary.aberto}      color={T.red}     />
+            <PdfStatChip label="Resolvidos"    value={incidents_summary.resolvidos}  color={T.green}   />
+            <PdfStatChip label="SLA Violado"   value={incidents_summary.sla_violado} color={T.orange}  />
+          </div>
+
+          <PC style={{ padding:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:T.textPrim, marginBottom:10 }}>
+              Incidentes da Sprint Atual — {current_sprint}
+            </div>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10.5 }}>
+              <thead>
+                <tr style={{ background:T.purpleLight }}>
+                  {['Incidente','Sprint','Criado','Término Real','Tempo Res.','SLA','Descrição','Status'].map((h) => (
+                    <th key={h} style={{ padding:'8px 10px', textAlign:'left', color:T.purple, fontWeight:700, fontSize:9.5, letterSpacing:.5, textTransform:'uppercase', borderBottom:`2px solid ${T.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(incidents||[]).filter((i)=>i.sprints.includes(current_sprint)).map((inc,idx) => {
+                  let tempo = '-';
+                  if (inc.created_dt && inc.termino_dt) {
+                    const hrs = (new Date(inc.termino_dt) - new Date(inc.created_dt)) / 3600000;
+                    tempo = `${hrs.toFixed(1)}h`;
+                  }
+                  return (
+                    <tr key={inc.key} style={{ background:idx%2===0?'rgba(82,25,161,.025)':'#fff', borderBottom:`1px solid ${T.border}` }}>
+                      <td style={{ padding:'7px 10px', fontWeight:700, color:T.purpleMid }}>{inc.sn_id||inc.key}</td>
+                      <td style={{ padding:'7px 10px', color:T.textSec }}>{inc.sprints.at(-1)||'-'}</td>
+                      <td style={{ padding:'7px 10px', color:T.textSec }}>{fmtDT(inc.created_dt)}</td>
+                      <td style={{ padding:'7px 10px', color:T.textSec }}>{fmtDT(inc.termino_dt)}</td>
+                      <td style={{ padding:'7px 10px', color:T.textSec }}>{tempo}</td>
+                      <td style={{ padding:'7px 10px' }}>
+                        {inc.sla_met===true  && <span style={{ color:T.green,  fontWeight:700 }}>✓ OK</span>}
+                        {inc.sla_met===false && <span style={{ color:T.red,    fontWeight:700 }}>✗ Viola</span>}
+                        {inc.sla_met===null  && <span style={{ color:T.textMut }}>—</span>}
+                      </td>
+                      <td style={{ padding:'7px 10px', color:T.textSec, maxWidth:260, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{inc.summary}</td>
+                      <td style={{ padding:'7px 10px', color:T.purpleMid }}>{inc.status}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </PC>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 export default function StatusReportV2() {
@@ -717,6 +982,7 @@ export default function StatusReportV2() {
   const [toast,        setToast]        = useState(null);
   const [ganttFilters, setGanttFilters] = useState({ UP:true, DN:true, HM:true });
   const reportRef = useRef(null);
+  const pdfRef    = useRef(null);
 
   // Sync state → URL
   const setArea = (v) => {
@@ -746,16 +1012,17 @@ export default function StatusReportV2() {
   };
 
   const downloadPdf = async () => {
-    if (!reportRef.current) return;
+    if (!pdfRef.current || !data) return;
     setPdfLoading(true);
     try {
       await html2pdf().set({
-        margin:0,
-        filename:`StatusReport_v2_${area}_${data?.today?.replace(/-/g,'')||'export'}.pdf`,
-        image:{type:'jpeg',quality:.98},
-        html2canvas:{scale:2,useCORS:true,logging:false},
-        jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},
-      }).from(reportRef.current).save();
+        margin: [12, 10, 12, 10],
+        filename: `StatusReport_v2_${area}_${data.today?.replace(/-/g,'') || 'export'}.pdf`,
+        image: { type:'jpeg', quality:0.97 },
+        html2canvas: { scale:2, useCORS:true, logging:false, windowWidth:1060, width:1060, allowTaint:true },
+        jsPDF: { unit:'mm', format:'a4', orientation:'landscape' },
+        pagebreak: { mode:'css', before:'.pdf-break' },
+      }).from(pdfRef.current).save();
     } finally { setPdfLoading(false); }
   };
 
@@ -912,6 +1179,9 @@ export default function StatusReportV2() {
       )}
 
       {loading && <LoadingState />}
+
+      {/* ── Container dedicado ao PDF – sempre renderizado fora da tela ── */}
+      {data && <PdfContainer pdfRef={pdfRef} data={data} area={area} ganttFilters={ganttFilters} />}
 
       {data && (
         <div ref={reportRef}>
