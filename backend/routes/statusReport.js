@@ -254,16 +254,30 @@ function classify(items, today, currentSprint, nextSp) {
       continue;
     }
 
-    // Upstream
-    const spStart = sprintForDate(start);
-    if (spStart === currentSprint) result.current_upstream.push(it);
-    else if (spStart === nextSp) result.next_upstream.push(it);
+    // DENAs nunca entram como upstream (são demandas em execução, sempre downstream)
+    const isDena = it.key.startsWith('DENA-');
 
-    // Downstream
+    // Upstream — apenas itens não-DENA
+    const spStart = sprintForDate(start);
+    if (!isDena) {
+      if (spStart === currentSprint) result.current_upstream.push(it);
+      else if (spStart === nextSp)   result.next_upstream.push(it);
+    }
+
+    // Downstream — regra normal por data de fim
     const spEnd = sprintForDate(end);
     if (['Em Andamento', 'Refinamento', 'Homologação', 'Aceito'].includes(status)) {
       if (spEnd === currentSprint) result.current_downstream.push(it);
-      else if (spEnd === nextSp) result.next_downstream.push(it);
+      else if (spEnd === nextSp)   result.next_downstream.push(it);
+    }
+
+    // DENAs: usa start para determinar sprint e força downstream
+    if (isDena && spStart) {
+      if (spStart === currentSprint && !result.current_downstream.find((x) => x.key === it.key)) {
+        result.current_downstream.push(it);
+      } else if (spStart === nextSp && !result.next_downstream.find((x) => x.key === it.key)) {
+        result.next_downstream.push(it);
+      }
     }
 
     // Downstream em atraso
