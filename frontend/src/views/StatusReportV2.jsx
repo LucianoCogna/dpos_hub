@@ -175,20 +175,73 @@ function SectionLabel({ text, color=T.purpleMid, icon }) {
   );
 }
 
-function ItemRow({ item, badge, badgeColor, accent, extra, extraColor, bg, delay=0 }) {
+const PROJ_COLORS = {
+  DDPL: { color:'#0052CC', bg:'#E3F2FD' },
+  DENA: { color:'#E53935', bg:'#FDECEA' },
+};
+
+function LinkedSubRow({ li }) {
+  const pc = PROJ_COLORS[li.project] || { color:T.textSec, bg:T.purpleLight };
+  const isDone = ['Resolvido','Fechado','Done','Concluído','Em produção'].includes(li.status);
   return (
-    <a href={`${JIRA}/browse/${item.key}`} target="_blank" rel="noreferrer"
+    <a href={`${JIRA}/browse/${li.key}`} target="_blank" rel="noreferrer"
       className="sr2-item"
-      style={{ display:'flex',alignItems:'center',gap:8,padding:'6px 10px',marginBottom:3,borderRadius:9,
-        background:bg||'transparent', borderLeft:`3px solid ${accent||T.purpleMid}`,
-        textDecoration:'none', cursor:'pointer', animationDelay:`${delay}ms` }}>
-      <span style={{ color:T.purpleMid,fontWeight:800,fontSize:10,flexShrink:0,minWidth:64 }}>{item.key}</span>
-      <span style={{ color:T.textSec,fontSize:11,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }} title={item.summary}>{item.summary}</span>
-      <div style={{ display:'flex',gap:4,flexShrink:0 }}>
-        {extra && <Chip text={extra}  color={extraColor||T.orange} />}
-        {badge && <Chip text={badge}  color={badgeColor||T.purpleMid} />}
-      </div>
+      style={{ display:'flex', alignItems:'center', gap:7, padding:'4px 10px 4px 14px',
+        marginBottom:2, borderRadius:7, background:pc.bg+'88',
+        borderLeft:`2px solid ${pc.color}55`, textDecoration:'none' }}>
+      <span style={{ fontSize:9, fontWeight:800, color:T.white, background:pc.color,
+        padding:'1px 6px', borderRadius:4, flexShrink:0 }}>{li.project}</span>
+      <span style={{ color:pc.color, fontWeight:700, fontSize:10, flexShrink:0 }}>{li.key}</span>
+      <span style={{ color:T.textSec, fontSize:10.5, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}
+        title={li.summary}>{li.summary}</span>
+      <span style={{ fontSize:9.5, color:isDone?T.green:T.textMut, fontWeight:600, flexShrink:0 }}>{li.status}</span>
     </a>
+  );
+}
+
+function ItemRow({ item, badge, badgeColor, accent, extra, extraColor, bg, delay=0 }) {
+  const [expanded, setExpanded] = useState(false);
+  const links = item.linked_issues || [];
+  const hasLinks = links.length > 0;
+
+  return (
+    <div style={{ marginBottom:3, animationDelay:`${delay}ms` }}>
+      <div className="sr2-item"
+        style={{ display:'flex',alignItems:'center',gap:8,padding:'6px 10px',borderRadius:9,
+          background:bg||'transparent', borderLeft:`3px solid ${accent||T.purpleMid}` }}>
+        {/* Expand toggle */}
+        {hasLinks ? (
+          <button onClick={() => setExpanded((v)=>!v)} style={{
+            background:'none', border:'none', cursor:'pointer', padding:0,
+            color:T.purpleMid, fontSize:11, fontWeight:800, flexShrink:0, width:14,
+          }}>{expanded ? '▾' : '▸'}</button>
+        ) : (
+          <span style={{ width:14, flexShrink:0 }} />
+        )}
+        <a href={`${JIRA}/browse/${item.key}`} target="_blank" rel="noreferrer"
+          style={{ display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0,textDecoration:'none' }}>
+          <span style={{ color:T.purpleMid,fontWeight:800,fontSize:10,flexShrink:0,minWidth:60 }}>{item.key}</span>
+          <span style={{ color:T.textSec,fontSize:11,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}
+            title={item.summary}>{item.summary}</span>
+        </a>
+        <div style={{ display:'flex',gap:4,flexShrink:0 }}>
+          {extra && <Chip text={extra}  color={extraColor||T.orange} />}
+          {badge && <Chip text={badge}  color={badgeColor||T.purpleMid} />}
+          {hasLinks && (
+            <span style={{ fontSize:9, color:T.textMut, background:T.purpleLight,
+              padding:'1px 6px', borderRadius:10, fontWeight:600 }}>
+              {links.length} link{links.length>1?'s':''}
+            </span>
+          )}
+        </div>
+      </div>
+      {/* Sub-itens expandidos */}
+      {expanded && hasLinks && (
+        <div className="sr2-fade-in" style={{ marginLeft:22, marginTop:2 }}>
+          {links.map((li) => <LinkedSubRow key={li.key} li={li} />)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -711,16 +764,32 @@ function PC({ children, style = {} }) {
 }
 
 function PdfRow({ item, accent, badge, badgeColor }) {
+  const links = item.linked_issues || [];
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 10px',
-      marginBottom:3, borderRadius:8, borderLeft:`3px solid ${accent||T.purpleMid}`,
-      background:'rgba(82,25,161,0.02)' }}>
-      <span style={{ color:T.purpleMid, fontWeight:800, fontSize:10, flexShrink:0, minWidth:64 }}>{item.key}</span>
-      <span style={{ color:T.textSec, fontSize:11, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.summary}</span>
-      {badge && (
-        <span style={{ background:`${badgeColor||T.purpleMid}18`, color:badgeColor||T.purpleMid, border:`1px solid ${badgeColor||T.purpleMid}30`,
-          borderRadius:20, padding:'2px 9px', fontSize:10, fontWeight:700, whiteSpace:'nowrap', flexShrink:0 }}>{badge}</span>
-      )}
+    <div style={{ marginBottom:4 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 10px',
+        borderRadius:8, borderLeft:`3px solid ${accent||T.purpleMid}`,
+        background:'rgba(82,25,161,0.02)' }}>
+        <span style={{ color:T.purpleMid, fontWeight:800, fontSize:10, flexShrink:0, minWidth:64 }}>{item.key}</span>
+        <span style={{ color:T.textSec, fontSize:11, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.summary}</span>
+        {badge && (
+          <span style={{ background:`${badgeColor||T.purpleMid}18`, color:badgeColor||T.purpleMid, border:`1px solid ${badgeColor||T.purpleMid}30`,
+            borderRadius:20, padding:'2px 9px', fontSize:10, fontWeight:700, whiteSpace:'nowrap', flexShrink:0 }}>{badge}</span>
+        )}
+      </div>
+      {links.map((li) => {
+        const pc = PROJ_COLORS[li.project] || { color:T.textSec, bg:T.purpleLight };
+        return (
+          <div key={li.key} style={{ display:'flex', alignItems:'center', gap:7,
+            marginLeft:16, marginTop:2, padding:'3px 10px',
+            borderRadius:6, background:pc.bg+'88', borderLeft:`2px solid ${pc.color}55` }}>
+            <span style={{ fontSize:8, fontWeight:800, color:'#fff', background:pc.color, padding:'1px 5px', borderRadius:3, flexShrink:0 }}>{li.project}</span>
+            <span style={{ color:pc.color, fontWeight:700, fontSize:9, flexShrink:0 }}>{li.key}</span>
+            <span style={{ color:T.textSec, fontSize:9.5, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{li.summary}</span>
+            <span style={{ fontSize:9, color:T.textMut, flexShrink:0 }}>{li.status}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

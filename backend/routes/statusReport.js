@@ -136,6 +136,7 @@ const DAPL_FIELDS = [
   'customfield_11164', // Epic start date
   'customfield_11165', // Epic end date
   'customfield_10020', // Sprint
+  'issuelinks',        // Linked work items (DDPL / DENA)
 ];
 
 const INCIDENT_FIELDS = [
@@ -145,6 +146,8 @@ const INCIDENT_FIELDS = [
   'customfield_10020', // Sprint
   'customfield_10050', // SN ID
 ];
+
+const LINKED_PROJECTS = ['DDPL', 'DENA'];
 
 function mapDaplItem(issue) {
   const f = issue.fields;
@@ -156,6 +159,23 @@ function mapDaplItem(issue) {
     ? parseDate(f.customfield_11165)
     : parseDate(f.duedate);
 
+  // Extrai DDPLs e DENAs vinculados via linked work items
+  const linked_issues = (f.issuelinks || []).flatMap((link) => {
+    const linked = link.outwardIssue || link.inwardIssue;
+    if (!linked) return [];
+    const proj = linked.key.split('-')[0];
+    if (!LINKED_PROJECTS.includes(proj)) return [];
+    return [{
+      key:       linked.key,
+      project:   proj,
+      summary:   linked.fields?.summary || '',
+      status:    linked.fields?.status?.name || '',
+      issuetype: linked.fields?.issuetype?.name || '',
+      link_type: link.type?.name || '',
+      link_dir:  link.inwardIssue ? 'inward' : 'outward',
+    }];
+  });
+
   return {
     key: issue.key,
     type,
@@ -164,6 +184,7 @@ function mapDaplItem(issue) {
     start,
     end,
     implant: parseDate(f.customfield_10401),
+    linked_issues,
   };
 }
 
@@ -419,6 +440,7 @@ function serializeItem(it) {
     _atraso: it._atraso ?? null,
     _dias_homolog: it._dias_homolog ?? null,
     _badge: it._badge ?? null,
+    linked_issues: it.linked_issues ?? [],
   };
 }
 
