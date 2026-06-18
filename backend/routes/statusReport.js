@@ -401,6 +401,15 @@ router.get('/status-report', async (req, res) => {
     }
 
     const cls = classify(items, today, currentSprint, nextSp);
+
+    // TODO: remover após preencher Epic Start Date no Jira
+    if (areaKey === 'ESG') {
+      const dapl561 = items.find((i) => i.key === 'DAPL-561');
+      if (dapl561 && !cls.current_upstream.find((i) => i.key === 'DAPL-561')) {
+        cls.current_upstream.push(dapl561);
+      }
+    }
+
     const piMetrics = calcPiMetrics(items, cls.finalizados);
 
     // Incidents summary
