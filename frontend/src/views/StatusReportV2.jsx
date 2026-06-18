@@ -1086,17 +1086,6 @@ export default function StatusReportV2() {
 
   useEffect(() => { load(area, sprint); }, [area, sprint]);
 
-  // Carrega/salva notas por área × sprint no localStorage
-  useEffect(() => {
-    if (!current_sprint) return;
-    setNotes(localStorage.getItem(`sr2-notes-${area}-${current_sprint}`) || '');
-  }, [area, current_sprint]);
-
-  const handleNotes = (val) => {
-    setNotes(val);
-    if (current_sprint) localStorage.setItem(`sr2-notes-${area}-${current_sprint}`, val);
-  };
-
   const copyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setToast('🔗 Link copiado!');
@@ -1142,6 +1131,17 @@ export default function StatusReportV2() {
   const { classification:cls, current_sprint, next_sprint, today,
     sprints_calendar, sprint_order, pi_metrics,
     incidents, incidents_summary, incidents_by_sprint, has_incidents_page } = data || {};
+
+  // Carrega/salva notas por área × sprint no localStorage (após desestruturar current_sprint)
+  useEffect(() => {
+    if (!current_sprint) return;
+    setNotes(localStorage.getItem(`sr2-notes-${area}-${current_sprint}`) || '');
+  }, [area, current_sprint]);
+
+  const handleNotes = (val) => {
+    setNotes(val);
+    if (current_sprint) localStorage.setItem(`sr2-notes-${area}-${current_sprint}`, val);
+  };
 
   const tabs = [
     { id:'sprint',     label:'Sprint',     icon:'⚡' },
