@@ -592,21 +592,25 @@ function PresentationMode({ slides, onExit }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Sub-views (reutilizados em tabs e em slides)
 // ─────────────────────────────────────────────────────────────────────────────
-function SprintCol({ title, accentGrad, items_data, sprintsCalendar, currentSprint, delay=0 }) {
+function SprintCol({ title, accentGrad, items_data, sprintsCalendar, currentSprint, sprintKey, delay=0 }) {
+  const colSprint = sprintKey || currentSprint;
+  const colCal    = sprintsCalendar?.[colSprint];
+  const dateRange = colCal ? ` (${fmtDate(colCal.start)} até ${fmtDate(colCal.end)})` : '';
   return (
     <Card delay={delay} style={{ flex:1, minWidth:0 }}>
       <div style={{ padding:'14px 18px', background:accentGrad, borderBottom:`1px solid ${T.border}` }}>
-        <span style={{ color:T.white,fontWeight:800,fontSize:14,letterSpacing:-.3 }}>{title}</span>
+        <div style={{ color:T.white, fontWeight:800, fontSize:14, letterSpacing:-.3 }}>{title}</div>
+        {dateRange && <div style={{ color:'rgba(255,255,255,0.75)', fontSize:11, marginTop:2 }}>{dateRange}</div>}
       </div>
       <div style={{ padding:'14px 16px' }}>
         {items_data.map(({ sectionTitle, items, kind, color }) => {
-          const cal = sprintsCalendar?.[currentSprint];
+          const cal = colCal;
           return (
             <div key={sectionTitle} style={{ marginBottom:16 }}>
               <SectionLabel text={`${sectionTitle} · ${items.length}`} color={color} />
               {items.length===0 ? <Empty /> : items.map((it, i) => {
                 let badge,badgeColor,extra,extraColor,accent,bg;
-                if (kind==='upstream')      { badge=cal?`até ${fmtDate(cal.end)}`:'UP'; badgeColor=T.purpleMid; accent=T.yellow; extra=it.status; extraColor=T.textSec; }
+                if (kind==='upstream')      { accent=T.yellow; extra=it.status; extraColor=T.textSec; }
                 else if (kind==='downstream') { badge=it.end?fmtDate(it.end):'DN'; badgeColor=T.purpleMid; accent=T.purpleMid; if(it._atraso){extra=`↻ ${it._atraso}d`;extraColor=T.orange;} }
                 else if (kind==='homolog')  { const d=it._dias_homolog; badge=d!=null?(d>15?`⚠ ${d}d`:`${d}d`):'Hom.'; badgeColor=d>15?T.red:T.orange; accent=T.orange; }
                 else if (kind==='blocked')  { accent=T.red; bg=T.redLight; }
@@ -799,12 +803,14 @@ function PdfRow({ item, accent, badge, badgeColor, extra, extraColor }) {
   );
 }
 
-function PdfSprintBlock({ title, color, items_data, sprintsCalendar, currentSprint }) {
-  const cal = sprintsCalendar?.[currentSprint];
+function PdfSprintBlock({ title, color, items_data, sprintsCalendar, currentSprint, sprintKey }) {
+  const cal      = sprintsCalendar?.[sprintKey || currentSprint];
+  const dateRange = cal ? ` (${fmtDate(cal.start)} até ${fmtDate(cal.end)})` : '';
   return (
     <div style={{ flex:1, minWidth:0 }}>
       <div style={{ background:`linear-gradient(135deg,${color},${color}cc)`, padding:'10px 14px', borderRadius:'14px 14px 0 0' }}>
-        <span style={{ color:'#fff', fontWeight:800, fontSize:13 }}>{title}</span>
+        <div style={{ color:'#fff', fontWeight:800, fontSize:13 }}>{title}</div>
+        {dateRange && <div style={{ color:'rgba(255,255,255,0.75)', fontSize:10, marginTop:2 }}>{dateRange}</div>}
       </div>
       <PC style={{ borderRadius:'0 0 14px 14px', padding:'12px 14px' }}>
         {items_data.map(({ sectionTitle, items, kind, color:c }) => (
@@ -816,7 +822,7 @@ function PdfSprintBlock({ title, color, items_data, sprintsCalendar, currentSpri
               ? <div style={{ color:T.textMut, fontSize:10, fontStyle:'italic', padding:'2px 10px' }}>Nenhum item</div>
               : items.map((it) => {
                   let badge, badgeColor, accent, extra, extraColor;
-                  if (kind==='upstream')      { badge=cal?`até ${fmtDate(cal.end)}`:'UP'; badgeColor=T.purpleMid; accent=T.yellow; extra=it.status; extraColor=T.textSec; }
+                  if (kind==='upstream')      { accent=T.yellow; extra=it.status; extraColor=T.textSec; }
                   else if (kind==='downstream') { badge=it.end?fmtDate(it.end):'DN'; badgeColor=T.purpleMid; accent=T.purpleMid; }
                   else if (kind==='homolog')  { const d=it._dias_homolog; badge=d!=null?(d>15?`⚠ ${d}d`:`${d}d`):'Hom.'; badgeColor=d>15?T.red:T.orange; accent=T.orange; }
                   else if (kind==='blocked')  { accent=T.red; }
@@ -887,7 +893,7 @@ function PdfContainer({ pdfRef, data, area, ganttFilters }) {
         <div style={{ display:'flex', gap:14, marginBottom:14 }}>
           <PdfSprintBlock
             title={`⚡ Sprint Atual — ${current_sprint}`} color={T.purple}
-            sprintsCalendar={sprints_calendar} currentSprint={current_sprint}
+            sprintsCalendar={sprints_calendar} currentSprint={current_sprint} sprintKey={current_sprint}
             items_data={[
               {sectionTitle:'Upstream',    items:cls.current_upstream,   kind:'upstream',      color:T.yellow},
               {sectionTitle:'Downstream',  items:cls.current_downstream, kind:'downstream',    color:T.purpleMid},
@@ -898,7 +904,7 @@ function PdfContainer({ pdfRef, data, area, ganttFilters }) {
           />
           <PdfSprintBlock
             title={`🔮 Próxima Sprint — ${next_sprint}`} color={T.purpleMid}
-            sprintsCalendar={sprints_calendar} currentSprint={current_sprint}
+            sprintsCalendar={sprints_calendar} currentSprint={current_sprint} sprintKey={next_sprint}
             items_data={[
               {sectionTitle:'Upstream',       items:cls.next_upstream,   kind:'upstream',    color:T.yellow},
               {sectionTitle:'Downstream',     items:cls.next_downstream, kind:'downstream',  color:T.purpleMid},
@@ -1147,10 +1153,10 @@ export default function StatusReportV2() {
               {cls.current_blocked.length > 0 && <StatCard delay={240} label="Bloqueados" value={cls.current_blocked.length} color={T.red} glow={T.redGlow} icon="🔴" />}
             </div>
             <div style={{ display:'flex',gap:14 }}>
-              <SprintCol title={`Sprint Atual — ${current_sprint}`} accentGrad={`linear-gradient(135deg,${T.purple},${T.purpleMid})`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} delay={0}
+              <SprintCol title={`Sprint Atual — ${current_sprint}`} accentGrad={`linear-gradient(135deg,${T.purple},${T.purpleMid})`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} sprintKey={current_sprint} delay={0}
                 items_data={[{sectionTitle:'Upstream',items:cls.current_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.current_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Homologação',items:cls.current_homolog,kind:'homolog',color:T.orange},{sectionTitle:'Bloqueados',items:cls.current_blocked,kind:'blocked',color:T.red},{sectionTitle:'Concluídos',items:cls.current_done,kind:'done',color:T.green}]}
               />
-              <SprintCol title={`Próxima Sprint — ${next_sprint}`} accentGrad={`linear-gradient(135deg,${T.purpleMid},#9B59B6)`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} delay={80}
+              <SprintCol title={`Próxima Sprint — ${next_sprint}`} accentGrad={`linear-gradient(135deg,${T.purpleMid},#9B59B6)`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} sprintKey={next_sprint} delay={80}
                 items_data={[{sectionTitle:'Upstream',items:cls.next_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.next_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Hom. Prevista',items:cls.next_homolog,kind:'next_homolog',color:T.orange}]}
               />
             </div>
@@ -1311,10 +1317,10 @@ export default function StatusReportV2() {
           {tab==='sprint' && (
             <div>
               <div style={{ display:'flex',gap:14,marginBottom:14 }}>
-                <SprintCol title={`⚡ Sprint Atual — ${current_sprint}`} accentGrad={`linear-gradient(135deg,${T.purple},${T.purpleMid})`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} delay={0}
+                <SprintCol title={`⚡ Sprint Atual — ${current_sprint}`} accentGrad={`linear-gradient(135deg,${T.purple},${T.purpleMid})`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} sprintKey={current_sprint} delay={0}
                   items_data={[{sectionTitle:'Upstream',items:cls.current_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.current_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Homologação',items:cls.current_homolog,kind:'homolog',color:T.orange},{sectionTitle:'Bloqueados',items:cls.current_blocked,kind:'blocked',color:T.red},{sectionTitle:'Concluídos',items:cls.current_done,kind:'done',color:T.green}]}
                 />
-                <SprintCol title={`🔮 Próxima Sprint — ${next_sprint}`} accentGrad={`linear-gradient(135deg,${T.purpleMid},#9B59B6)`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} delay={80}
+                <SprintCol title={`🔮 Próxima Sprint — ${next_sprint}`} accentGrad={`linear-gradient(135deg,${T.purpleMid},#9B59B6)`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} sprintKey={next_sprint} delay={80}
                   items_data={[{sectionTitle:'Upstream',items:cls.next_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.next_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Hom. Prevista',items:cls.next_homolog,kind:'next_homolog',color:T.orange}]}
                 />
               </div>
