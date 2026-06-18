@@ -1330,14 +1330,35 @@ export default function StatusReportV2() {
 
           {/* Tab: Cronograma */}
           {tab==='cronograma' && (
-            <div style={{ display:'flex',gap:14 }}>
-              <PiSidebar piMetrics={pi_metrics} cls={cls} delay={0} />
-              <Card delay={100} style={{ flex:1,padding:18 }}>
-                <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8 }}>
-                  <div style={{ fontSize:13,fontWeight:700,color:T.textPrim }}>Cronograma — Épicos Ativos e Backlog Planejado</div>
-                  <GanttFilters filters={ganttFilters} onChange={toggleGantt} />
-                </div>
-                <ModernGantt items={cls.gantt_full} sprintsCalendar={sprints_calendar} sprintOrder={sprint_order} currentSprint={current_sprint} nextSprint={next_sprint} today={today} filters={ganttFilters} />
+            <div>
+              <div style={{ display:'flex',gap:14,marginBottom:14 }}>
+                <PiSidebar piMetrics={pi_metrics} cls={cls} delay={0} />
+                <Card delay={100} style={{ flex:1,padding:18 }}>
+                  <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8 }}>
+                    <div style={{ fontSize:13,fontWeight:700,color:T.textPrim }}>Cronograma — Épicos Ativos e Backlog Planejado</div>
+                    <GanttFilters filters={ganttFilters} onChange={toggleGantt} />
+                  </div>
+                  <ModernGantt items={cls.gantt_full} sprintsCalendar={sprints_calendar} sprintOrder={sprint_order} currentSprint={current_sprint} nextSprint={next_sprint} today={today} filters={ganttFilters} />
+                </Card>
+              </div>
+
+              {/* Sem Priorização */}
+              <Card delay={200} style={{ padding:18 }}>
+                <SectionLabel text={`Sem Priorização · ${cls.sem_priorizacao.length}`} color={T.red} icon="⚠️" />
+                <div style={{ fontSize:11,color:T.textMut,marginBottom:12,marginTop:-4 }}>itens em Backlog ou Funil sem data de início nem fim</div>
+                {cls.sem_priorizacao.length === 0
+                  ? <Empty label="Nenhum item sem priorização" />
+                  : (
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))', gap:'2px 14px' }}>
+                      {cls.sem_priorizacao.map((it, i) => (
+                        <ItemRow key={it.key} item={it}
+                          accent={T.red} bg={T.redLight}
+                          badge={it.status} badgeColor={T.red}
+                          delay={i * 15} />
+                      ))}
+                    </div>
+                  )
+                }
               </Card>
             </div>
           )}
