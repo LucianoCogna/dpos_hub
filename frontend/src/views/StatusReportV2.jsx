@@ -1349,12 +1349,27 @@ export default function StatusReportV2() {
                 {cls.sem_priorizacao.length === 0
                   ? <Empty label="Nenhum item sem priorização" />
                   : (
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))', gap:'2px 14px' }}>
+                    <div>
+                      {/* header */}
+                      <div style={{ display:'grid', gridTemplateColumns:'90px 1fr 80px', gap:8,
+                        padding:'4px 10px', fontSize:10, fontWeight:700, color:T.textMut,
+                        borderBottom:`1px solid ${T.border}`, marginBottom:2 }}>
+                        <span>#</span><span>Título</span><span style={{ textAlign:'right' }}>Status</span>
+                      </div>
                       {cls.sem_priorizacao.map((it, i) => (
-                        <ItemRow key={it.key} item={it}
-                          accent={T.red} bg={T.redLight}
-                          badge={it.status} badgeColor={T.red}
-                          delay={i * 15} />
+                        <div key={it.key}
+                          style={{ display:'grid', gridTemplateColumns:'90px 1fr 80px', gap:8,
+                            alignItems:'center', padding:'6px 10px', fontSize:12,
+                            background: i%2===0 ? `${T.red}08` : 'transparent',
+                            borderBottom:`1px solid ${T.border}44` }}>
+                          <a href={`${JIRA}/browse/${it.key}`} target="_blank" rel="noreferrer"
+                            style={{ color:T.red, fontWeight:700, textDecoration:'none', whiteSpace:'nowrap' }}>
+                            {it.key}
+                          </a>
+                          <span style={{ color:T.textPrim, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}
+                            title={it.summary}>{it.summary}</span>
+                          <span style={{ textAlign:'right', fontSize:10.5, color:T.textMut, fontStyle:'italic' }}>{it.status}</span>
+                        </div>
                       ))}
                     </div>
                   )
