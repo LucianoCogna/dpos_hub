@@ -606,10 +606,10 @@ function SprintCol({ title, accentGrad, items_data, sprintsCalendar, currentSpri
               <SectionLabel text={`${sectionTitle} · ${items.length}`} color={color} />
               {items.length===0 ? <Empty /> : items.map((it, i) => {
                 let badge,badgeColor,extra,extraColor,accent,bg;
-                if (kind==='upstream')      { badge=cal?`até ${fmtDate(cal.end)}`:'UP'; badgeColor=T.purpleMid; accent=T.yellow; }
+                if (kind==='upstream')      { badge=cal?`até ${fmtDate(cal.end)}`:'UP'; badgeColor=T.purpleMid; accent=T.yellow; extra=it.status; extraColor=T.textSec; }
                 else if (kind==='downstream') { badge=it.end?fmtDate(it.end):'DN'; badgeColor=T.purpleMid; accent=T.purpleMid; if(it._atraso){extra=`↻ ${it._atraso}d`;extraColor=T.orange;} }
                 else if (kind==='homolog')  { const d=it._dias_homolog; badge=d!=null?(d>15?`⚠ ${d}d`:`${d}d`):'Hom.'; badgeColor=d>15?T.red:T.orange; accent=T.orange; }
-                else if (kind==='blocked')  { badge='🔴 Bloqueado'; badgeColor=T.red; accent=T.red; bg=T.redLight; }
+                else if (kind==='blocked')  { accent=T.red; bg=T.redLight; }
                 else if (kind==='done')     { badge=it.implant?fmtFull(it.implant):'✓'; badgeColor=T.green; accent=T.green; bg=T.greenLight; }
                 else if (kind==='next_homolog') { badge=it._badge||'Hom.'; badgeColor=T.orange; accent=T.orange; }
                 return <ItemRow key={it.key+kind} item={it} badge={badge} badgeColor={badgeColor} accent={accent} extra={extra} extraColor={extraColor} bg={bg} delay={i*30} />;
@@ -764,7 +764,7 @@ function PC({ children, style = {} }) {
   );
 }
 
-function PdfRow({ item, accent, badge, badgeColor }) {
+function PdfRow({ item, accent, badge, badgeColor, extra, extraColor }) {
   const links = item.linked_issues || [];
   return (
     <div style={{ marginBottom:4 }}>
@@ -773,6 +773,10 @@ function PdfRow({ item, accent, badge, badgeColor }) {
         background:'rgba(82,25,161,0.02)' }}>
         <span style={{ color:T.purpleMid, fontWeight:800, fontSize:10, flexShrink:0, minWidth:64 }}>{item.key}</span>
         <span style={{ color:T.textSec, fontSize:11, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.summary}</span>
+        {extra && (
+          <span style={{ background:`${extraColor||T.textSec}18`, color:extraColor||T.textSec, border:`1px solid ${extraColor||T.textSec}25`,
+            borderRadius:20, padding:'2px 9px', fontSize:10, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>{extra}</span>
+        )}
         {badge && (
           <span style={{ background:`${badgeColor||T.purpleMid}18`, color:badgeColor||T.purpleMid, border:`1px solid ${badgeColor||T.purpleMid}30`,
             borderRadius:20, padding:'2px 9px', fontSize:10, fontWeight:700, whiteSpace:'nowrap', flexShrink:0 }}>{badge}</span>
@@ -811,14 +815,14 @@ function PdfSprintBlock({ title, color, items_data, sprintsCalendar, currentSpri
             {items.length === 0
               ? <div style={{ color:T.textMut, fontSize:10, fontStyle:'italic', padding:'2px 10px' }}>Nenhum item</div>
               : items.map((it) => {
-                  let badge, badgeColor, accent;
-                  if (kind==='upstream')      { badge=cal?`até ${fmtDate(cal.end)}`:'UP'; badgeColor=T.purpleMid; accent=T.yellow; }
+                  let badge, badgeColor, accent, extra, extraColor;
+                  if (kind==='upstream')      { badge=cal?`até ${fmtDate(cal.end)}`:'UP'; badgeColor=T.purpleMid; accent=T.yellow; extra=it.status; extraColor=T.textSec; }
                   else if (kind==='downstream') { badge=it.end?fmtDate(it.end):'DN'; badgeColor=T.purpleMid; accent=T.purpleMid; }
                   else if (kind==='homolog')  { const d=it._dias_homolog; badge=d!=null?(d>15?`⚠ ${d}d`:`${d}d`):'Hom.'; badgeColor=d>15?T.red:T.orange; accent=T.orange; }
-                  else if (kind==='blocked')  { badge='🔴 Bloqueado'; badgeColor=T.red; accent=T.red; }
+                  else if (kind==='blocked')  { accent=T.red; }
                   else if (kind==='done')     { badge=it.implant?fmtFull(it.implant):'✓'; badgeColor=T.green; accent=T.green; }
                   else if (kind==='next_homolog') { badge='Hom.'; badgeColor=T.orange; accent=T.orange; }
-                  return <PdfRow key={it.key+kind} item={it} accent={accent} badge={badge} badgeColor={badgeColor} />;
+                  return <PdfRow key={it.key+kind} item={it} accent={accent} badge={badge} badgeColor={badgeColor} extra={extra} extraColor={extraColor} />;
                 })
             }
           </div>
