@@ -228,6 +228,7 @@ function classify(items, today, currentSprint, nextSp) {
     current_upstream: [],
     current_downstream: [],
     current_homolog: [],
+    current_blocked: [],
     current_done: [],
     next_upstream: [],
     next_downstream: [],
@@ -304,6 +305,11 @@ function classify(items, today, currentSprint, nextSp) {
     // Homologação prevista (downstream termina na sprint atual)
     if (spEnd === currentSprint && ['Em Andamento', 'Refinamento'].includes(status)) {
       result.next_homolog.push({ ...it, _badge: 'Downstream → Hom.' });
+    }
+
+    // Bloqueados
+    if (status === 'Bloqueado') {
+      result.current_blocked.push(it);
     }
 
     // Concluídos nesta sprint
@@ -424,6 +430,7 @@ router.get('/status-report', async (req, res) => {
         current_upstream:   cls.current_upstream.map(serializeItem),
         current_downstream: cls.current_downstream.map(serializeItem),
         current_homolog:    cls.current_homolog.map(serializeItem),
+        current_blocked:    cls.current_blocked.map(serializeItem),
         current_done:       cls.current_done.map(serializeItem),
         next_upstream:      cls.next_upstream.map(serializeItem),
         next_downstream:    cls.next_downstream.map(serializeItem),

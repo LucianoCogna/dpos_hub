@@ -609,6 +609,7 @@ function SprintCol({ title, accentGrad, items_data, sprintsCalendar, currentSpri
                 if (kind==='upstream')      { badge=cal?`até ${fmtDate(cal.end)}`:'UP'; badgeColor=T.purpleMid; accent=T.yellow; }
                 else if (kind==='downstream') { badge=it.end?fmtDate(it.end):'DN'; badgeColor=T.purpleMid; accent=T.purpleMid; if(it._atraso){extra=`↻ ${it._atraso}d`;extraColor=T.orange;} }
                 else if (kind==='homolog')  { const d=it._dias_homolog; badge=d!=null?(d>15?`⚠ ${d}d`:`${d}d`):'Hom.'; badgeColor=d>15?T.red:T.orange; accent=T.orange; }
+                else if (kind==='blocked')  { badge='🔴 Bloqueado'; badgeColor=T.red; accent=T.red; bg=T.redLight; }
                 else if (kind==='done')     { badge=it.implant?fmtFull(it.implant):'✓'; badgeColor=T.green; accent=T.green; bg=T.greenLight; }
                 else if (kind==='next_homolog') { badge=it._badge||'Hom.'; badgeColor=T.orange; accent=T.orange; }
                 return <ItemRow key={it.key+kind} item={it} badge={badge} badgeColor={badgeColor} accent={accent} extra={extra} extraColor={extraColor} bg={bg} delay={i*30} />;
@@ -814,6 +815,7 @@ function PdfSprintBlock({ title, color, items_data, sprintsCalendar, currentSpri
                   if (kind==='upstream')      { badge=cal?`até ${fmtDate(cal.end)}`:'UP'; badgeColor=T.purpleMid; accent=T.yellow; }
                   else if (kind==='downstream') { badge=it.end?fmtDate(it.end):'DN'; badgeColor=T.purpleMid; accent=T.purpleMid; }
                   else if (kind==='homolog')  { const d=it._dias_homolog; badge=d!=null?(d>15?`⚠ ${d}d`:`${d}d`):'Hom.'; badgeColor=d>15?T.red:T.orange; accent=T.orange; }
+                  else if (kind==='blocked')  { badge='🔴 Bloqueado'; badgeColor=T.red; accent=T.red; }
                   else if (kind==='done')     { badge=it.implant?fmtFull(it.implant):'✓'; badgeColor=T.green; accent=T.green; }
                   else if (kind==='next_homolog') { badge='Hom.'; badgeColor=T.orange; accent=T.orange; }
                   return <PdfRow key={it.key+kind} item={it} accent={accent} badge={badge} badgeColor={badgeColor} />;
@@ -886,6 +888,7 @@ function PdfContainer({ pdfRef, data, area, ganttFilters }) {
               {sectionTitle:'Upstream',    items:cls.current_upstream,   kind:'upstream',      color:T.yellow},
               {sectionTitle:'Downstream',  items:cls.current_downstream, kind:'downstream',    color:T.purpleMid},
               {sectionTitle:'Homologação', items:cls.current_homolog,    kind:'homolog',       color:T.orange},
+              {sectionTitle:'Bloqueados',  items:cls.current_blocked,    kind:'blocked',       color:T.red},
               {sectionTitle:'Concluídos',  items:cls.current_done,       kind:'done',          color:T.green},
             ]}
           />
@@ -1137,10 +1140,11 @@ export default function StatusReportV2() {
               <StatCard delay={60}  label="Downstream"  value={cls.current_downstream.length+cls.next_downstream.length}   color={T.purpleMid} glow={T.purpleGlow}  icon="🔽" sub={`${cls.current_downstream.length} atual · ${cls.next_downstream.length} próxima`} />
               <StatCard delay={120} label="Homologação" value={cls.current_homolog.length}                                  color={T.orange}    glow={T.orangeGlow}  icon="🧪" sub={`${cls.next_homolog.length} prevista próxima`} />
               <StatCard delay={180} label="Entregues"   value={cls.current_done.length}                                    color={T.green}     glow={T.greenGlow}   icon="✅" sub={`${cls.finalizados.length} finalizados total`} />
+              {cls.current_blocked.length > 0 && <StatCard delay={240} label="Bloqueados" value={cls.current_blocked.length} color={T.red} glow={T.redGlow} icon="🔴" />}
             </div>
             <div style={{ display:'flex',gap:14 }}>
               <SprintCol title={`Sprint Atual — ${current_sprint}`} accentGrad={`linear-gradient(135deg,${T.purple},${T.purpleMid})`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} delay={0}
-                items_data={[{sectionTitle:'Upstream',items:cls.current_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.current_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Homologação',items:cls.current_homolog,kind:'homolog',color:T.orange},{sectionTitle:'Concluídos',items:cls.current_done,kind:'done',color:T.green}]}
+                items_data={[{sectionTitle:'Upstream',items:cls.current_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.current_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Homologação',items:cls.current_homolog,kind:'homolog',color:T.orange},{sectionTitle:'Bloqueados',items:cls.current_blocked,kind:'blocked',color:T.red},{sectionTitle:'Concluídos',items:cls.current_done,kind:'done',color:T.green}]}
               />
               <SprintCol title={`Próxima Sprint — ${next_sprint}`} accentGrad={`linear-gradient(135deg,${T.purpleMid},#9B59B6)`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} delay={80}
                 items_data={[{sectionTitle:'Upstream',items:cls.next_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.next_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Hom. Prevista',items:cls.next_homolog,kind:'next_homolog',color:T.orange}]}
@@ -1290,7 +1294,8 @@ export default function StatusReportV2() {
             <StatCard delay={60}  label="Downstream"  value={cls.current_downstream.length+cls.next_downstream.length} color={T.purpleMid} glow={T.purpleGlow}  icon="🔽" sub={`${cls.current_downstream.length} atual · ${cls.next_downstream.length} próxima`} />
             <StatCard delay={120} label="Homologação" value={cls.current_homolog.length}                                color={T.orange}    glow={T.orangeGlow}  icon="🧪" sub={`${cls.next_homolog.length} prevista próxima`} />
             <StatCard delay={180} label="Entregues"   value={cls.current_done.length}                                  color={T.green}     glow={T.greenGlow}   icon="✅" sub={`${cls.finalizados.length} finalizados total`} />
-            {has_incidents_page && <StatCard delay={240} label="Incidentes" value={incidents_summary.total} color={T.red} glow={T.redGlow} icon="🚨" sub={`${incidents_summary.aberto} em aberto`} />}
+            {cls.current_blocked.length > 0 && <StatCard delay={220} label="Bloqueados" value={cls.current_blocked.length} color={T.red} glow={T.redGlow} icon="🔴" />}
+            {has_incidents_page && <StatCard delay={260} label="Incidentes" value={incidents_summary.total} color={T.red} glow={T.redGlow} icon="🚨" sub={`${incidents_summary.aberto} em aberto`} />}
           </div>
 
           {/* Tabs */}
@@ -1303,7 +1308,7 @@ export default function StatusReportV2() {
             <div>
               <div style={{ display:'flex',gap:14,marginBottom:14 }}>
                 <SprintCol title={`⚡ Sprint Atual — ${current_sprint}`} accentGrad={`linear-gradient(135deg,${T.purple},${T.purpleMid})`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} delay={0}
-                  items_data={[{sectionTitle:'Upstream',items:cls.current_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.current_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Homologação',items:cls.current_homolog,kind:'homolog',color:T.orange},{sectionTitle:'Concluídos',items:cls.current_done,kind:'done',color:T.green}]}
+                  items_data={[{sectionTitle:'Upstream',items:cls.current_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.current_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Homologação',items:cls.current_homolog,kind:'homolog',color:T.orange},{sectionTitle:'Bloqueados',items:cls.current_blocked,kind:'blocked',color:T.red},{sectionTitle:'Concluídos',items:cls.current_done,kind:'done',color:T.green}]}
                 />
                 <SprintCol title={`🔮 Próxima Sprint — ${next_sprint}`} accentGrad={`linear-gradient(135deg,${T.purpleMid},#9B59B6)`} sprintsCalendar={sprints_calendar} currentSprint={current_sprint} delay={80}
                   items_data={[{sectionTitle:'Upstream',items:cls.next_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.next_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Hom. Prevista',items:cls.next_homolog,kind:'next_homolog',color:T.orange}]}
