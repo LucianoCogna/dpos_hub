@@ -404,9 +404,11 @@ router.get('/status-report', async (req, res) => {
 
     // TODO: remover após preencher Epic Start Date no Jira
     if (areaKey === 'ESG') {
-      const dapl561 = items.find((i) => i.key === 'DAPL-561');
-      if (dapl561 && !cls.current_upstream.find((i) => i.key === 'DAPL-561')) {
-        cls.current_upstream.push(dapl561);
+      for (const key of ['DAPL-561', 'DAPL-562']) {
+        const it = items.find((i) => i.key === key);
+        if (it && !cls.current_upstream.find((i) => i.key === key)) {
+          cls.current_upstream.push(it);
+        }
       }
     }
 
