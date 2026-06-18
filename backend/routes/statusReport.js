@@ -47,6 +47,7 @@ const AREA_CONFIG = {
   'ALIANCA_1_SABER':     { label: 'ALIANCA_1_SABER',     denaEpic: null,        page3: false },
   'Plurall':             { label: 'Plurall',             denaEpic: null,        page3: false },
   'MACROPROCESSO':       { label: 'MACROPROCESSO',       denaEpic: null,        page3: false },
+  'ESG':                 { label: 'ESG',                 denaEpic: null,        page3: false },
 };
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
