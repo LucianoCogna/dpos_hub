@@ -257,6 +257,9 @@ function classify(items, today, currentSprint, nextSp) {
     // DENAs nunca entram como upstream (são demandas em execução, sempre downstream)
     const isDena = it.key.startsWith('DENA-');
 
+    // DAPL só entra no downstream se tiver ao menos uma DENA vinculada
+    const hasDenaLink = (it.linked_issues || []).some((li) => li.project === 'DENA');
+
     // Upstream — apenas itens não-DENA
     const spStart = sprintForDate(start);
     if (!isDena) {
@@ -264,9 +267,9 @@ function classify(items, today, currentSprint, nextSp) {
       else if (spStart === nextSp)   result.next_upstream.push(it);
     }
 
-    // Downstream — regra normal por data de fim
+    // Downstream — regra normal por data de fim (DAPL só entra se tiver DENA vinculada)
     const spEnd = sprintForDate(end);
-    if (['Em Andamento', 'Refinamento', 'Homologação', 'Aceito'].includes(status)) {
+    if ((isDena || hasDenaLink) && ['Em Andamento', 'Refinamento', 'Homologação', 'Aceito'].includes(status)) {
       if (spEnd === currentSprint) result.current_downstream.push(it);
       else if (spEnd === nextSp)   result.next_downstream.push(it);
     }
@@ -280,8 +283,8 @@ function classify(items, today, currentSprint, nextSp) {
       }
     }
 
-    // Downstream em atraso
-    if (status === 'Em Andamento' && end && end < t) {
+    // Downstream em atraso (DAPL só entra se tiver DENA vinculada)
+    if ((isDena || hasDenaLink) && status === 'Em Andamento' && end && end < t) {
       const atraso = Math.floor((t - end) / 86400000);
       const enriched = { ...it, _atraso: atraso };
       if (!result.current_downstream.find((x) => x.key === it.key)) {
