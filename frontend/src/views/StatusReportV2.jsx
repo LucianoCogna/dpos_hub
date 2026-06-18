@@ -1063,6 +1063,7 @@ export default function StatusReportV2() {
   const [presentation, setPresentation] = useState(false);
   const [toast,        setToast]        = useState(null);
   const [ganttFilters, setGanttFilters] = useState({ UP:true, DN:true, HM:true });
+  const [notes,        setNotes]        = useState('');
   const reportRef = useRef(null);
   const pdfRef    = useRef(null);
 
@@ -1084,6 +1085,17 @@ export default function StatusReportV2() {
   }, []);
 
   useEffect(() => { load(area, sprint); }, [area, sprint]);
+
+  // Carrega/salva notas por área × sprint no localStorage
+  useEffect(() => {
+    if (!current_sprint) return;
+    setNotes(localStorage.getItem(`sr2-notes-${area}-${current_sprint}`) || '');
+  }, [area, current_sprint]);
+
+  const handleNotes = (val) => {
+    setNotes(val);
+    if (current_sprint) localStorage.setItem(`sr2-notes-${area}-${current_sprint}`, val);
+  };
 
   const copyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -1324,6 +1336,29 @@ export default function StatusReportV2() {
                   items_data={[{sectionTitle:'Upstream',items:cls.next_upstream,kind:'upstream',color:T.yellow},{sectionTitle:'Downstream',items:cls.next_downstream,kind:'downstream',color:T.purpleMid},{sectionTitle:'Hom. Prevista',items:cls.next_homolog,kind:'next_homolog',color:T.orange}]}
                 />
               </div>
+
+              {/* Observações / Pontos Importantes */}
+              <Card delay={160} style={{ padding:18, marginBottom:14 }}>
+                <SectionLabel text="Pontos Importantes / Observações" color={T.purple} icon="📝" />
+                <div style={{ fontSize:11, color:T.textMut, marginTop:-4, marginBottom:10 }}>
+                  Adicione aqui pontos não mapeados no Jira — salvo por área × sprint no navegador
+                </div>
+                <textarea
+                  value={notes}
+                  onChange={(e) => handleNotes(e.target.value)}
+                  placeholder="Ex: dependência externa identificada, risco não rastreado, alinhamento pendente com stakeholder..."
+                  style={{
+                    width:'100%', boxSizing:'border-box', minHeight:90, padding:'10px 12px',
+                    fontSize:13, color:T.textPrim, background:T.purpleLight,
+                    border:`1.5px solid ${T.border}`, borderRadius:10,
+                    resize:'vertical', outline:'none', fontFamily:'inherit', lineHeight:1.6,
+                  }}
+                />
+                {notes && (
+                  <div style={{ fontSize:10, color:T.textMut, marginTop:5, textAlign:'right' }}>✓ salvo localmente</div>
+                )}
+              </Card>
+
               <CalendarStrip sprintsCalendar={sprints_calendar} currentSprint={current_sprint} nextSprint={next_sprint} />
             </div>
           )}
