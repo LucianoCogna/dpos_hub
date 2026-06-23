@@ -178,13 +178,11 @@ function ProductList({ items }) {
   );
 }
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
-function Dashboard({ area, items, onReset }) {
-  const now = new Date();
-
+// ── Seção de categoria (stats + gráfico + tabela) ────────────────────────────
+function CategorySection({ title, jiraLabel, items, barColor, accentColor }) {
+  const now      = new Date();
   const withDate = items.filter((it) => deliveryDate(it));
 
-  // Agrupamento por mês (últimos 12 meses)
   const months = lastNMonths(12);
   const countByMonth = {};
   for (const it of withDate) {
@@ -193,7 +191,6 @@ function Dashboard({ area, items, onReset }) {
   }
   const barData = months.map(({ key, label }) => ({ label, qtd: countByMonth[key] || 0 }));
 
-  // Stats
   const cutoff30  = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
   const cutoff90  = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
   const cutoff180 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 180);
@@ -210,60 +207,99 @@ function Dashboard({ area, items, onReset }) {
     : null;
 
   return (
+    <div style={{ marginBottom: 36 }}>
+      {/* Título da seção */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <div style={{ width: 4, height: 22, borderRadius: 2, background: accentColor }} />
+        <span style={{ fontSize: 16, fontWeight: 800, color: accentColor }}>{title}</span>
+        <span style={{ fontSize: 12, color: '#999', fontWeight: 500 }}>
+          — {items.length} {items.length === 1 ? 'entrega' : 'entregas'}
+        </span>
+      </div>
+
+      {items.length === 0 ? (
+        <div style={{
+          background: '#fff', borderRadius: 14, padding: '36px 20px', textAlign: 'center',
+          border: `1.5px solid ${accentColor}22`, color: '#bbb',
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
+          <div style={{ fontSize: 13 }}>Nenhuma entrega com a label <code style={{ background: '#f5f5f5', padding: '1px 6px', borderRadius: 3 }}>{jiraLabel}</code></div>
+        </div>
+      ) : (
+        <>
+          {/* Stat cards */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+            <StatCard label="Total" value={items.length} color={accentColor} />
+            <StatCard label="Últimos 30 dias" value={last30} sub="entregas recentes" color="#1565C0" />
+            <StatCard label="Últimos 3 meses" value={last90} sub="trimestre atual" color="#2E7D32" />
+            <StatCard label="Últimos 6 meses" value={last180} sub="semestre atual" color="#E65100" />
+            <StatCard label="Tempo médio" value={avgDays !== null ? `${avgDays}d` : '—'} sub="início à entrega" color="#6A1B9A" />
+          </div>
+
+          {/* Gráfico */}
+          <div style={{
+            background: '#fff', borderRadius: 14, padding: '18px 22px', marginBottom: 16,
+            border: `1.5px solid ${accentColor}22`, boxShadow: '0 2px 8px rgba(0,0,0,.05)',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 12 }}>
+              ENTREGAS POR MÊS — ÚLTIMOS 12 MESES
+            </div>
+            <BarChart width={980} height={200} data={barData} margin={{ top: 4, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip formatter={(v) => [`${v} entregas`]} />
+              <Bar dataKey="qtd" fill={barColor} radius={[5, 5, 0, 0]} />
+            </BarChart>
+          </div>
+
+          {/* Tabela */}
+          <div style={{
+            background: '#fff', borderRadius: 14, padding: '18px 22px',
+            border: `1.5px solid ${accentColor}22`, boxShadow: '0 2px 8px rgba(0,0,0,.05)',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 12 }}>DEMANDAS</div>
+            <ProductList items={items} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function Dashboard({ area, items, onReset }) {
+  const novoProduto = items.filter((it) => it.categorias.includes('novo_produto_dado'));
+  const evolucao    = items.filter((it) => it.categorias.includes('Evolução'));
+
+  return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>
         <button onClick={onReset}
           style={{ fontSize: 13, fontWeight: 600, color: '#5521B5', background: '#EDE7F6', border: 'none', borderRadius: 8, padding: '7px 16px', cursor: 'pointer' }}>
           ← Trocar área
         </button>
         <span style={{ fontSize: 17, fontWeight: 800, color: '#1a1a2e' }}>{area.icon} {area.label}</span>
-        <span style={{ fontSize: 12, color: '#999' }}>— {items.length} entregas encontradas</span>
       </div>
 
-      {/* Stat cards */}
-      <div style={{ display: 'flex', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
-        <StatCard label="Total de entregas" value={items.length} color="#5521B5" />
-        <StatCard label="Últimos 30 dias" value={last30} sub="entregas recentes" color="#1565C0" />
-        <StatCard label="Últimos 3 meses" value={last90} sub="trimestre atual" color="#2E7D32" />
-        <StatCard label="Últimos 6 meses" value={last180} sub="semestre atual" color="#E65100" />
-        <StatCard label="Tempo médio" value={avgDays !== null ? `${avgDays}d` : '—'} sub="do início à entrega" color="#6A1B9A" />
-      </div>
+      <CategorySection
+        title="🚀 Novo Produto de Dados"
+        jiraLabel="novo_produto_dado"
+        items={novoProduto}
+        barColor="#5521B5"
+        accentColor="#5521B5"
+      />
 
-      {/* Gráfico de barras — entregas por mês */}
-      <div style={{
-        background: '#fff', borderRadius: 14, padding: '20px 24px', marginBottom: 20,
-        border: '1.5px solid #e8e0f8', boxShadow: '0 2px 8px rgba(0,0,0,.05)',
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#333', marginBottom: 16 }}>
-          Entregas por mês — últimos 12 meses
-        </div>
-        <BarChart width={900} height={220} data={barData} margin={{ top: 4, right: 10, left: -10, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0e8ff" />
-          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-          <Tooltip formatter={(v) => [`${v} entregas`]} />
-          <Bar dataKey="qtd" fill="#5521B5" radius={[5, 5, 0, 0]} />
-        </BarChart>
-      </div>
+      <div style={{ borderTop: '2px dashed #e8e0f8', marginBottom: 36 }} />
 
-      {/* Tabela de produtos entregues */}
-      <div style={{
-        background: '#fff', borderRadius: 14, padding: '20px 24px',
-        border: '1.5px solid #e8e0f8', boxShadow: '0 2px 8px rgba(0,0,0,.05)',
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#333', marginBottom: 16 }}>
-          Produtos entregues
-        </div>
-        {items.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#bbb' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
-            <div style={{ fontSize: 14 }}>Nenhuma entrega encontrada para esta área.</div>
-          </div>
-        ) : (
-          <ProductList items={items} />
-        )}
-      </div>
+      <CategorySection
+        title="🔄 Evolução"
+        jiraLabel="Evolução"
+        items={evolucao}
+        barColor="#2E7D32"
+        accentColor="#2E7D32"
+      />
     </div>
   );
 }
