@@ -56,6 +56,12 @@ export const getStatusReport = (area = 'G&C', sprint = null) => {
   return api.get(`/status-report?${params}`).then((r) => r.data);
 };
 
+// Entregas
+export const getEntregas = (area = 'TODAS', categoria = 'TODAS') => {
+  const params = new URLSearchParams({ area, categoria });
+  return api.get(`/entregas?${params}`).then((r) => r.data);
+};
+
 // Documentação
 export const getDocumentacao = (sprintId) => api.get(`/documentacao/${sprintId}`).then((r) => r.data);
 export const gerarDocumentacao = (sprintId) => api.post(`/documentacao/${sprintId}/gerar`).then((r) => r.data);
