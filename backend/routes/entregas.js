@@ -80,16 +80,13 @@ function mapItem(issue) {
 
 router.get('/entregas', async (req, res) => {
   try {
-    const { area, categoria } = req.query;
+    const { area } = req.query;
 
     const areaClause = (area && area !== 'TODAS')
       ? `labels = "${area}"`
       : `labels in (${AREAS.map((a) => `"${a}"`).join(', ')})`;
 
-    const catLabel   = CATEGORIA_MAP[categoria];
-    const catClause  = catLabel ? ` AND labels = "${catLabel}"` : '';
-
-    const jql = `project = DAPL AND ${areaClause}${catClause} AND status in ("Em produção", "Aceito", "Concluído") AND issuetype in (Epic, "História (M)", História, Story) ORDER BY key ASC`;
+    const jql = `project = DAPL AND ${areaClause} AND status in ("Em produção", "Aceito", "Concluído") AND issuetype in (Epic, "História (M)", História, Story) ORDER BY key ASC`;
 
     const issues = await fetchAll(jql, FIELDS);
     const items  = issues.map(mapItem);

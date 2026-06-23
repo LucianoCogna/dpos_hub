@@ -57,8 +57,8 @@ export const getStatusReport = (area = 'G&C', sprint = null) => {
 };
 
 // Entregas
-export const getEntregas = (area = 'TODAS', categoria = 'TODAS') => {
-  const params = new URLSearchParams({ area, categoria });
+export const getEntregas = (area = 'TODAS') => {
+  const params = new URLSearchParams({ area });
   return api.get(`/entregas?${params}`).then((r) => r.data);
 };
 
