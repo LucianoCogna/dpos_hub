@@ -89,7 +89,7 @@ router.get('/entregas', async (req, res) => {
     const catLabel   = CATEGORIA_MAP[categoria];
     const catClause  = catLabel ? ` AND labels = "${catLabel}"` : '';
 
-    const jql = `project = DAPL AND ${areaClause}${catClause} AND issuetype in (Epic, "História (M)", História, Story) ORDER BY key ASC`;
+    const jql = `project = DAPL AND ${areaClause}${catClause} AND status in ("Em produção", "Aceito", "Concluído") AND issuetype in (Epic, "História (M)", História, Story) ORDER BY key ASC`;
 
     const issues = await fetchAll(jql, FIELDS);
     const items  = issues.map(mapItem);
