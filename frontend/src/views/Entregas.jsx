@@ -206,6 +206,20 @@ function CategorySection({ title, jiraLabel, items, barColor, accentColor }) {
     ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
     : null;
 
+  const cumData = barData.reduce((acc, { label, qtd }) => {
+    const prev = acc.length ? acc[acc.length - 1].acum : 0;
+    acc.push({ label, acum: prev + qtd });
+    return acc;
+  }, []);
+
+  const leadData = [
+    { label: '0–15d',  qtd: durations.filter((d) => d < 15).length },
+    { label: '15–30d', qtd: durations.filter((d) => d >= 15 && d < 30).length },
+    { label: '30–60d', qtd: durations.filter((d) => d >= 30 && d < 60).length },
+    { label: '60–90d', qtd: durations.filter((d) => d >= 60 && d < 90).length },
+    { label: '90d+',   qtd: durations.filter((d) => d >= 90).length },
+  ];
+
   return (
     <div style={{ marginBottom: 36 }}>
       {/* Título da seção */}
@@ -251,6 +265,41 @@ function CategorySection({ title, jiraLabel, items, barColor, accentColor }) {
               <Tooltip formatter={(v) => [`${v} entregas`]} />
               <Bar dataKey="qtd" fill={barColor} radius={[5, 5, 0, 0]} />
             </BarChart>
+          </div>
+
+          {/* Curva cumulativa + Histograma de lead time */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+            <div style={{
+              background: '#fff', borderRadius: 14, padding: '18px 22px',
+              border: `1.5px solid ${accentColor}22`, boxShadow: '0 2px 8px rgba(0,0,0,.05)',
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 12 }}>
+                CURVA CUMULATIVA — ÚLTIMOS 12 MESES
+              </div>
+              <LineChart width={430} height={180} data={cumData} margin={{ top: 4, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip formatter={(v) => [`${v} entregas acumuladas`]} />
+                <Line type="monotone" dataKey="acum" stroke={accentColor} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+              </LineChart>
+            </div>
+
+            <div style={{
+              background: '#fff', borderRadius: 14, padding: '18px 22px',
+              border: `1.5px solid ${accentColor}22`, boxShadow: '0 2px 8px rgba(0,0,0,.05)',
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 12 }}>
+                DISTRIBUIÇÃO DE LEAD TIME
+              </div>
+              <BarChart width={430} height={180} data={leadData} margin={{ top: 4, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip formatter={(v) => [`${v} entregas`]} />
+                <Bar dataKey="qtd" fill={accentColor} radius={[5, 5, 0, 0]} opacity={0.8} />
+              </BarChart>
+            </div>
           </div>
 
           {/* Tabela */}
