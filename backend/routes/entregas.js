@@ -98,4 +98,22 @@ router.get('/entregas', async (req, res) => {
   }
 });
 
+// Endpoint temporário de debug — remove após investigação
+router.get('/debug-issue/:key', async (req, res) => {
+  try {
+    const url = `${process.env.JIRA_BASE_URL}/rest/api/3/issue/${req.params.key}`;
+    const { data } = await axios.get(url, { headers: getHeaders(), timeout: 10000 });
+    const f = data.fields;
+    res.json({
+      key:       data.key,
+      issuetype: f.issuetype?.name,
+      status:    f.status?.name,
+      labels:    f.labels,
+      summary:   f.summary,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
