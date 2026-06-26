@@ -269,7 +269,7 @@ function CategorySection({ title, jiraLabel, items, barColor, accentColor }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 function Dashboard({ area, items, onReset }) {
-  const novoProduto = items.filter((it) => it.categorias.includes('novo_produto_dado'));
+  const novoProduto = items.filter((it) => it.categorias.includes('NOVO_PRODUTO_DADO'));
   const evolucao    = items.filter((it) => it.categorias.includes('Evolução'));
 
   return (
@@ -285,7 +285,7 @@ function Dashboard({ area, items, onReset }) {
 
       <CategorySection
         title="🚀 Novo Produto de Dados"
-        jiraLabel="novo_produto_dado"
+        jiraLabel="NOVO_PRODUTO_DADO"
         items={novoProduto}
         barColor="#5521B5"
         accentColor="#5521B5"

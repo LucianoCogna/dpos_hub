@@ -11,7 +11,7 @@ const AREAS = [
 // chave interna → label exata no Jira
 const CATEGORIA_MAP = {
   evolucao:      'Evolução',
-  novo_produto:  'novo_produto_dado',
+  novo_produto:  'NOVO_PRODUTO_DADO',
 };
 
 const FIELDS = [
