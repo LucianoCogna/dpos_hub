@@ -270,7 +270,7 @@ function CategorySection({ title, jiraLabel, items, barColor, accentColor }) {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 function Dashboard({ area, items, onReset }) {
   const novoProduto = items.filter((it) => it.categorias.includes('NOVO_PRODUTO_DADO'));
-  const evolucao    = items.filter((it) => it.categorias.includes('Evolução'));
+  const evolucao    = items.filter((it) => it.categorias.includes('EVOLUÇÃO'));
 
   return (
     <div>
@@ -295,7 +295,7 @@ function Dashboard({ area, items, onReset }) {
 
       <CategorySection
         title="🔄 Evolução"
-        jiraLabel="Evolução"
+        jiraLabel="EVOLUÇÃO"
         items={evolucao}
         barColor="#2E7D32"
         accentColor="#2E7D32"

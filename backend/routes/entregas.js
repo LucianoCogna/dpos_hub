@@ -10,7 +10,7 @@ const AREAS = [
 
 // chave interna → label exata no Jira
 const CATEGORIA_MAP = {
-  evolucao:      'Evolução',
+  evolucao:      'EVOLUÇÃO',
   novo_produto:  'NOVO_PRODUTO_DADO',
 };
 
@@ -57,7 +57,8 @@ function toISO(d) {
 
 function mapItem(issue) {
   const f    = issue.fields;
-  const type = f.issuetype?.name?.toLowerCase().includes('epic') ? 'Epic' : 'História';
+  const typeName = f.issuetype?.name?.toLowerCase() || '';
+  const type = typeName.includes('epic') || typeName.includes('épico') ? 'Epic' : 'História';
   const start = type === 'Epic' ? parseDate(f.customfield_11164) : parseDate(f.customfield_10015);
   const end   = type === 'Epic' ? parseDate(f.customfield_11165) : parseDate(f.duedate);
 
@@ -86,7 +87,7 @@ router.get('/entregas', async (req, res) => {
       ? `labels = "${area}"`
       : `labels in (${AREAS.map((a) => `"${a}"`).join(', ')})`;
 
-    const jql = `project = DAPL AND ${areaClause} AND status in ("Em produção", "Aceito", "Concluído") AND issuetype in (Epic, "História (M)", História, Story) ORDER BY key ASC`;
+    const jql = `project = DAPL AND ${areaClause} AND status in ("Em produção", "Aceito", "Concluído") AND issuetype in (Epic, Épico, "História (M)", História, Story) ORDER BY key ASC`;
 
     const issues = await fetchAll(jql, FIELDS);
     const items  = issues.map(mapItem);
