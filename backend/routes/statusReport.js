@@ -252,7 +252,8 @@ function classify(items, today, currentSprint, nextSp) {
   const t = today || new Date();
 
   const DONE_STATUSES    = ['Pronto', 'Em produção', 'Aceito'];
-  const HOMOLOG_STATUSES = ['Homologação', 'Concluído'];
+  const HOMOLOG_STATUSES = ['Homologação'];
+  const UPSTREAM_STATUSES = ['Refinamento', 'Backlog', 'Concluído'];
 
   for (const it of items) {
     const { status, sprint, duedate, implant, size } = it;
@@ -288,7 +289,7 @@ function classify(items, today, currentSprint, nextSp) {
 
     if (sprint === currentSprint) {
 
-      if (['Refinamento', 'Backlog'].includes(status)) {
+      if (UPSTREAM_STATUSES.includes(status)) {
         result.current_upstream.push(it);
 
         // Upstream → próxima sprint downstream (por size)
@@ -314,7 +315,7 @@ function classify(items, today, currentSprint, nextSp) {
     }
 
     // ── Próxima sprint upstream ────────────────────────────────────────────
-    if (sprint === nextSp && !DONE_STATUSES.includes(status)) {
+    if (sprint === nextSp && !DONE_STATUSES.includes(status) && status !== 'Bloqueado') {
       result.next_upstream.push(it);
     }
   }
