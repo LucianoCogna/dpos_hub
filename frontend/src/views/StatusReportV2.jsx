@@ -915,7 +915,7 @@ function PdfContainer({ pdfRef, data, area, ganttFilters }) {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
           marginBottom:16, paddingBottom:12, borderBottom:`2.5px solid ${T.purple}` }}>
           <div>
-            <div style={{ fontSize:22, fontWeight:900, color:T.purple, lineHeight:1 }}>Status Report V2</div>
+            <div style={{ fontSize:22, fontWeight:900, color:T.purple, lineHeight:1 }}>Status Report</div>
             <div style={{ fontSize:11, color:T.textMut, marginTop:3 }}>{area} · Gerado em {today}</div>
           </div>
           <div style={{ fontSize:15, fontWeight:800, color:'#fff', background:`linear-gradient(135deg,${T.purple},${T.purpleMid})`,
