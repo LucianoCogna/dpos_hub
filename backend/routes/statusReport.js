@@ -33,7 +33,19 @@ const PI_BOUNDS = {
   '26.4': ['2026-09-28', '2026-12-18'],
 };
 
-// Configuração por área
+// ── Size map (components field) ───────────────────────────────────────────────
+
+const SIZE_MAP = {
+  'size-PP':   { up: 1, dn: 1 },
+  'size-P':    { up: 2, dn: 1 },
+  'size-M':    { up: 2, dn: 2 },
+  'size-G':    { up: 3, dn: 2 },
+  'size-GG':   { up: 4, dn: 2 },
+  'size-Epic': { up: 1, dn: null }, // TBD
+};
+
+// ── Área config ───────────────────────────────────────────────────────────────
+
 const AREA_CONFIG = {
   'G&C':                 { label: 'G&C',                denaEpic: 'DENA-747',  page3: true  },
   'CAPTACAO_ANALITICA':  { label: 'CAPTACAO_ANALITICA',  denaEpic: 'DENA-4',    page3: true  },
@@ -88,7 +100,6 @@ function deriveCurrentSprint(today) {
   for (const [sp, [s, e]] of Object.entries(SPRINTS)) {
     if (t >= new Date(s) && t <= new Date(e)) return sp;
   }
-  // fallback: sprint mais próxima
   for (const [sp, [s]] of Object.entries(SPRINTS)) {
     if (t < new Date(s)) return sp;
   }
@@ -132,13 +143,12 @@ async function fetchAll(jql, fields, maxPages = 20) {
 
 const DAPL_FIELDS = [
   'summary', 'status', 'issuetype', 'labels',
-  'duedate',
-  'customfield_10015', // Story start date
-  'customfield_10401', // Implantation date
-  'customfield_11164', // Epic start date
-  'customfield_11165', // Epic end date
-  'customfield_10020', // Sprint
-  'issuelinks',        // Linked work items (DDPL / DENA)
+  'duedate',             // limite da história (para badge "tombou")
+  'customfield_10401',   // Data de Implantação
+  'customfield_10020',   // Sprint alocada no board
+  'components',          // size-PP / size-P / size-M / size-G / size-GG / size-Epic
+  'parent',              // épico pai (key + summary)
+  'issuelinks',          // mantido para compatibilidade
 ];
 
 const INCIDENT_FIELDS = [
@@ -149,44 +159,42 @@ const INCIDENT_FIELDS = [
   'customfield_10050', // SN ID
 ];
 
-const LINKED_PROJECTS = ['DDPL', 'DENA'];
+// ── Map DAPL issue ────────────────────────────────────────────────────────────
 
 function mapDaplItem(issue) {
   const f = issue.fields;
-  const type = f.issuetype?.name?.toLowerCase().includes('epic') ? 'Epic' : 'História';
-  const start = type === 'Epic'
-    ? parseDate(f.customfield_11164)
-    : parseDate(f.customfield_10015);
-  const end = type === 'Epic'
-    ? parseDate(f.customfield_11165)
-    : parseDate(f.duedate);
 
-  // Extrai DDPLs e DENAs vinculados via linked work items
-  const linked_issues = (f.issuelinks || []).flatMap((link) => {
-    const linked = link.outwardIssue || link.inwardIssue;
-    if (!linked) return [];
-    const proj = linked.key.split('-')[0];
-    if (!LINKED_PROJECTS.includes(proj)) return [];
-    return [{
-      key:       linked.key,
-      project:   proj,
-      summary:   linked.fields?.summary || '',
-      status:    linked.fields?.status?.name || '',
-      issuetype: linked.fields?.issuetype?.name || '',
-      link_type: link.type?.name || '',
-      link_dir:  link.inwardIssue ? 'inward' : 'outward',
-    }];
+  // Sprint: última entrada da lista = sprint atual do card
+  const rawSprints = (f.customfield_10020 || []).map((s) => {
+    let nm = s.name || '';
+    if (nm.startsWith('SP ')) nm = nm.slice(3);
+    return nm;
   });
+  const sprint        = rawSprints.length ? rawSprints[rawSprints.length - 1] : null;
+  const sprints_count = rawSprints.length;
+
+  // Size via components
+  const sizeComp = (f.components || []).find((c) => (c.name || '').startsWith('size-'));
+  const sizeCode = sizeComp?.name || null;
+  const size     = sizeCode && SIZE_MAP[sizeCode] ? { ...SIZE_MAP[sizeCode], code: sizeCode } : null;
+
+  // Épico pai
+  const parent = f.parent
+    ? { key: f.parent.key, summary: f.parent.fields?.summary || '' }
+    : null;
 
   return {
-    key: issue.key,
-    type,
-    status: f.status?.name || '',
-    summary: f.summary || '',
-    start,
-    end,
-    implant: parseDate(f.customfield_10401),
-    linked_issues,
+    key:           issue.key,
+    type:          'História',
+    status:        f.status?.name || '',
+    summary:       f.summary || '',
+    duedate:       f.duedate || null,
+    implant:       parseDate(f.customfield_10401),
+    sprint,
+    sprints_count,
+    size,
+    parent,
+    linked_issues: [], // mantido para compatibilidade
   };
 }
 
@@ -202,7 +210,7 @@ function mapIncident(issue) {
     if (nm.startsWith('SP ')) nm = nm.slice(3);
     return nm;
   });
-  const sla = parseDateTime(f.customfield_10167);
+  const sla     = parseDateTime(f.customfield_10167);
   const termino = parseDateTime(f.customfield_10009);
   const created = parseDateTime(f.created);
 
@@ -210,148 +218,177 @@ function mapIncident(issue) {
   if (sla && termino) slaMet = termino <= sla;
 
   return {
-    key: issue.key,
-    status: f.status?.name || '',
-    summary: f.summary || '',
+    key:        issue.key,
+    status:     f.status?.name || '',
+    summary:    f.summary || '',
     created_dt: created,
-    sla_dt: sla,
+    sla_dt:     sla,
     termino_dt: termino,
-    sla_met: slaMet,
+    sla_met:    slaMet,
     sprints,
-    sn_id: f.customfield_10050 || null,
+    sn_id:      f.customfield_10050 || null,
   };
 }
 
-// ── Classification logic (ported from data_logic.py) ─────────────────────────
+// ── Classification ────────────────────────────────────────────────────────────
 
 function classify(items, today, currentSprint, nextSp) {
   const result = {
-    current_upstream: [],
+    current_upstream:   [],
     current_downstream: [],
-    current_homolog: [],
-    current_blocked: [],
-    current_done: [],
-    next_upstream: [],
-    next_downstream: [],
-    next_homolog: [],
-    finalizados: [],
-    sem_priorizacao: [],
-    gantt: [],
-    backlog_planejado: [],
+    current_homolog:    [],
+    current_blocked:    [],
+    current_done:       [],
+    next_upstream:      [],
+    next_downstream:    [],
+    next_homolog:       [],
+    finalizados:        [],
+    sem_priorizacao:    [],
+    all_blocked:        [],
+    gantt:              [],
+    backlog_planejado:  [],
   };
 
   const t = today || new Date();
 
-  for (const it of items) {
-    const { status, start, end, implant, type } = it;
+  const DONE_STATUSES    = ['Pronto', 'Em produção', 'Aceito'];
+  const HOMOLOG_STATUSES = ['Homologação', 'Concluído'];
 
-    // Finalizados (Em produção com implantação)
-    if (status === 'Em produção' && implant) {
-      result.finalizados.push(it);
+  for (const it of items) {
+    const { status, sprint, duedate, implant, size } = it;
+
+    // ── Bloqueados ─────────────────────────────────────────────────────────
+    if (status === 'Bloqueado') {
+      result.all_blocked.push(it);
+      if (sprint === currentSprint) result.current_blocked.push(it);
+      if (sprint) result.gantt.push(it);
+      continue;
     }
 
-    // Sem priorização
-    if (['Backlog', 'Funil'].includes(status) && !start && !end) {
+    // ── Finalizados ────────────────────────────────────────────────────────
+    // Pronto / Em produção / Aceito — exige implant para contar como finalizado
+    if (DONE_STATUSES.includes(status)) {
+      if (implant) {
+        result.finalizados.push(it);
+        if (sprintForDate(implant) === currentSprint) {
+          result.current_done.push(it);
+        }
+      }
+      continue; // não aparece em sprint cards nem no gantt
+    }
+
+    // ── Sem priorização: sem sprint alocada ────────────────────────────────
+    if (!sprint) {
       result.sem_priorizacao.push(it);
       continue;
     }
 
-    // DENAs nunca entram como upstream (são demandas em execução, sempre downstream)
-    const isDena = it.key.startsWith('DENA-');
+    // ── A partir daqui: item ativo com sprint ──────────────────────────────
+    result.gantt.push(it);
 
-    // DAPL só entra no downstream se tiver ao menos uma DENA vinculada
-    const hasDenaLink = (it.linked_issues || []).some((li) => li.project === 'DENA');
+    if (sprint === currentSprint) {
 
-    // Upstream — apenas itens não-DENA
-    const spStart = sprintForDate(start);
-    if (!isDena) {
-      if (spStart === currentSprint) result.current_upstream.push(it);
-      else if (spStart === nextSp)   result.next_upstream.push(it);
-    }
+      if (['Refinamento', 'Backlog'].includes(status)) {
+        result.current_upstream.push(it);
 
-    // Downstream — regra normal por data de fim (DAPL só entra se tiver DENA vinculada)
-    const spEnd = sprintForDate(end);
-    if ((isDena || hasDenaLink) && ['Em Andamento', 'Refinamento', 'Homologação', 'Aceito'].includes(status)) {
-      if (spEnd === currentSprint) result.current_downstream.push(it);
-      else if (spEnd === nextSp)   result.next_downstream.push(it);
-    }
+        // Upstream → próxima sprint downstream (por size)
+        const sizeUp    = size?.up || 1;
+        const isEpicSz  = size?.code === 'size-Epic';
+        if (!isEpicSz && it.sprints_count >= sizeUp) {
+          result.next_downstream.push({ ...it, _badge: 'UP → DN' });
+        }
 
-    // DENAs: usa start para determinar sprint e força downstream
-    if (isDena && spStart) {
-      if (spStart === currentSprint && !result.current_downstream.find((x) => x.key === it.key)) {
-        result.current_downstream.push(it);
-      } else if (spStart === nextSp && !result.next_downstream.find((x) => x.key === it.key)) {
-        result.next_downstream.push(it);
+      } else if (status === 'Em Andamento') {
+        const atraso = duedate && new Date(duedate) < t
+          ? Math.floor((t - new Date(duedate)) / 86400000)
+          : null;
+        result.current_downstream.push({ ...it, _atraso: atraso });
+        result.next_homolog.push({ ...it, _badge: 'Downstream → Hom.' });
+
+      } else if (HOMOLOG_STATUSES.includes(status)) {
+        // Concluído (Jira) = Homologação no relatório (aguardando aceite)
+        const diasHomolog = implant ? Math.floor((t - implant) / 86400000) : null;
+        result.current_homolog.push({ ...it, _dias_homolog: diasHomolog });
+        result.next_homolog.push({ ...it, _badge: 'Continua' });
       }
     }
 
-    // Downstream em atraso (DAPL só entra se tiver DENA vinculada)
-    if ((isDena || hasDenaLink) && status === 'Em Andamento' && end && end < t) {
-      const atraso = Math.floor((t - end) / 86400000);
-      const enriched = { ...it, _atraso: atraso };
-      if (!result.current_downstream.find((x) => x.key === it.key)) {
-        result.current_downstream.push(enriched);
-      }
-    }
-
-    // Homologação atual
-    if (status === 'Homologação') {
-      const diasHomolog = end ? Math.floor((t - end) / 86400000) : null;
-      result.current_homolog.push({ ...it, _dias_homolog: diasHomolog });
-
-      // Homologação prevista (próxima)
-      result.next_homolog.push({ ...it, _badge: 'Continua' });
-    }
-
-    // Homologação prevista (downstream termina na sprint atual)
-    if (spEnd === currentSprint && ['Em Andamento', 'Refinamento'].includes(status)) {
-      result.next_homolog.push({ ...it, _badge: 'Downstream → Hom.' });
-    }
-
-    // Bloqueados
-    if (status === 'Bloqueado') {
-      result.current_blocked.push(it);
-    }
-
-    // Concluídos nesta sprint
-    if (implant && sprintForDate(implant) === currentSprint) {
-      result.current_done.push(it);
-    }
-
-    // Gantt: épicos ativos
-    if (type === 'Epic' && (start || end)) {
-      const alreadyDelivered = status === 'Em produção' && end && end < new Date(SPRINTS[currentSprint][0]);
-      if (!alreadyDelivered) result.gantt.push(it);
+    // ── Próxima sprint upstream ────────────────────────────────────────────
+    if (sprint === nextSp && !DONE_STATUSES.includes(status)) {
+      result.next_upstream.push(it);
     }
   }
 
-  // Backlog planejado
-  result.backlog_planejado = items
-    .filter((it) => it.status === 'Backlog' && it.start)
-    .sort((a, b) => a.start - b.start);
+  // Backlog com sprint futura (para sidebar PI)
+  result.backlog_planejado = result.gantt.filter((it) =>
+    it.status === 'Backlog' &&
+    SPRINT_ORDER.indexOf(it.sprint) > SPRINT_ORDER.indexOf(currentSprint)
+  );
 
-  result.gantt_full = [...result.gantt, ...result.backlog_planejado];
+  // Gantt full = gantt (dedup por key)
+  result.gantt_full = result.gantt;
 
   return result;
 }
 
+// ── PI metrics ────────────────────────────────────────────────────────────────
+
 function calcPiMetrics(items, finalizados) {
   const piMetrics = { '26.1': [0, 0], '26.2': [0, 0], '26.3': [0, 0], '26.4': [0, 0] };
+
+  // Planejado: mapeia sprint do item → PI
   for (const it of items) {
-    const pi = piForDate(it.end || it.start);
+    if (!it.sprint || !SPRINTS[it.sprint]) continue;
+    const pi = piForDate(new Date(SPRINTS[it.sprint][0]));
     if (pi && piMetrics[pi]) piMetrics[pi][1]++;
   }
+  // Entregue: finalizados com implant
   for (const it of finalizados) {
-    const pi = piForDate(it.implant);
+    const pi = it.implant ? piForDate(it.implant) : null;
     if (pi && piMetrics[pi]) piMetrics[pi][0]++;
   }
   return piMetrics;
 }
 
-function buildSprintsForResponse(currentSprint) {
+function buildSprintsForResponse() {
   return Object.fromEntries(
     Object.entries(SPRINTS).map(([sp, [s, e]]) => [sp, { start: s, end: e }])
   );
+}
+
+// ── Serializers ───────────────────────────────────────────────────────────────
+
+function serializeItem(it) {
+  return {
+    key:           it.key,
+    type:          it.type,
+    status:        it.status,
+    summary:       it.summary,
+    duedate:       it.duedate || null,
+    implant:       it.implant ? toISO(it.implant) : null,
+    sprint:        it.sprint || null,
+    sprints_count: it.sprints_count || 0,
+    size:          it.size || null,
+    parent:        it.parent || null,
+    _atraso:       it._atraso ?? null,
+    _dias_homolog: it._dias_homolog ?? null,
+    _badge:        it._badge ?? null,
+    linked_issues: it.linked_issues ?? [],
+  };
+}
+
+function serializeIncident(inc) {
+  return {
+    key:        inc.key,
+    status:     inc.status,
+    summary:    inc.summary,
+    created_dt: inc.created_dt ? inc.created_dt.toISOString() : null,
+    sla_dt:     inc.sla_dt    ? inc.sla_dt.toISOString()    : null,
+    termino_dt: inc.termino_dt ? inc.termino_dt.toISOString() : null,
+    sla_met:    inc.sla_met,
+    sprints:    inc.sprints,
+    sn_id:      inc.sn_id,
+  };
 }
 
 // ── Route: GET /api/status-report ─────────────────────────────────────────────
@@ -359,31 +396,27 @@ function buildSprintsForResponse(currentSprint) {
 router.get('/status-report', async (req, res) => {
   try {
     const areaKey = req.query.area || 'G&C';
-    const config = AREA_CONFIG[areaKey];
+    const config  = AREA_CONFIG[areaKey];
     if (!config) return res.status(400).json({ error: `Área inválida: ${areaKey}` });
 
-    const today = new Date();
+    const today         = new Date();
     const sprintOverride = req.query.sprint;
     const currentSprint = (sprintOverride && SPRINT_ORDER.includes(sprintOverride))
       ? sprintOverride
       : deriveCurrentSprint(today);
     const nextSp = nextSprint(currentSprint);
 
-    const [sprintEnd] = SPRINTS[currentSprint] ? [SPRINTS[currentSprint][1]] : [null];
+    // Apenas Histórias — épicos nunca são exibidos, parent vem via campo "parent"
+    const storyIssues = await fetchAll(
+      `labels = "${config.label}" AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`,
+      DAPL_FIELDS
+    ).catch(() => []);
+    const items = storyIssues.map(mapDaplItem);
 
-    // Fetch DAPL — épicos + histórias separados para garantir compatibilidade de tipo
-    const [epicIssues, storyIssues] = await Promise.all([
-      fetchAll(`labels = "${config.label}" AND issuetype = Epic ORDER BY key ASC`, DAPL_FIELDS).catch(() => []),
-      fetchAll(`labels = "${config.label}" AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`, DAPL_FIELDS).catch(() => []),
-    ]);
-    const daplIssues = [...epicIssues, ...storyIssues];
-    const items = daplIssues.map(mapDaplItem);
-
-    // Fetch incidents (se área tiver DENA) — não bloqueia se falhar
+    // Incidentes (se área tiver DENA)
     let incidents = [];
     if (config.page3 && config.denaEpic) {
       try {
-        // Tenta com parent primeiro; fallback para "Epic Link" legado
         let incIssues = [];
         for (const jql of [
           `project = DENA AND issuetype = Incidente AND parent = ${config.denaEpic} ORDER BY created DESC`,
@@ -400,20 +433,17 @@ router.get('/status-report', async (req, res) => {
       }
     }
 
-    const cls = classify(items, today, currentSprint, nextSp);
+    const cls        = classify(items, today, currentSprint, nextSp);
+    const piMetrics  = calcPiMetrics(items, cls.finalizados);
 
-    const piMetrics = calcPiMetrics(items, cls.finalizados);
-
-    // Incidents summary
-    const currentInc = incidents.filter((i) => i.sprints.includes(currentSprint));
+    const currentInc       = incidents.filter((i) => i.sprints.includes(currentSprint));
     const incidentsSummary = {
-      total: currentInc.length,
-      aberto: currentInc.filter((i) => !i.termino_dt).length,
-      resolvidos: currentInc.filter((i) => i.termino_dt).length,
+      total:       currentInc.length,
+      aberto:      currentInc.filter((i) => !i.termino_dt).length,
+      resolvidos:  currentInc.filter((i) => i.termino_dt).length,
       sla_violado: currentInc.filter((i) => i.sla_met === false).length,
     };
 
-    // Incidents by sprint (para histórico)
     const incidentsBySprint = {};
     for (const inc of incidents) {
       const sp = inc.sprints[inc.sprints.length - 1] || 'sem sprint';
@@ -422,12 +452,12 @@ router.get('/status-report', async (req, res) => {
     }
 
     res.json({
-      area: areaKey,
-      current_sprint: currentSprint,
-      next_sprint: nextSp,
-      today: toISO(today),
-      sprints_calendar: buildSprintsForResponse(currentSprint),
-      sprint_order: SPRINT_ORDER,
+      area:             areaKey,
+      current_sprint:   currentSprint,
+      next_sprint:      nextSp,
+      today:            toISO(today),
+      sprints_calendar: buildSprintsForResponse(),
+      sprint_order:     SPRINT_ORDER,
       classification: {
         current_upstream:   cls.current_upstream.map(serializeItem),
         current_downstream: cls.current_downstream.map(serializeItem),
@@ -439,12 +469,14 @@ router.get('/status-report', async (req, res) => {
         next_homolog:       cls.next_homolog.map(serializeItem),
         finalizados:        cls.finalizados.map(serializeItem),
         sem_priorizacao:    cls.sem_priorizacao.map(serializeItem),
+        all_blocked:        cls.all_blocked.map(serializeItem),
+        backlog_planejado:  cls.backlog_planejado.map(serializeItem),
         gantt_full:         cls.gantt_full.map(serializeItem),
       },
-      pi_metrics: piMetrics,
-      incidents: incidents.map(serializeIncident),
-      incidents_summary: incidentsSummary,
-      incidents_by_sprint: Object.fromEntries(
+      pi_metrics:           piMetrics,
+      incidents:            incidents.map(serializeIncident),
+      incidents_summary:    incidentsSummary,
+      incidents_by_sprint:  Object.fromEntries(
         Object.entries(incidentsBySprint).map(([sp, list]) => [sp, list.map(serializeIncident)])
       ),
       has_incidents_page: config.page3,
@@ -454,35 +486,5 @@ router.get('/status-report', async (req, res) => {
     res.status(500).json({ error: 'Erro ao gerar status report', detail: err.message });
   }
 });
-
-function serializeItem(it) {
-  return {
-    key: it.key,
-    type: it.type,
-    status: it.status,
-    summary: it.summary,
-    start: it.start ? toISO(it.start) : null,
-    end: it.end ? toISO(it.end) : null,
-    implant: it.implant ? toISO(it.implant) : null,
-    _atraso: it._atraso ?? null,
-    _dias_homolog: it._dias_homolog ?? null,
-    _badge: it._badge ?? null,
-    linked_issues: it.linked_issues ?? [],
-  };
-}
-
-function serializeIncident(inc) {
-  return {
-    key: inc.key,
-    status: inc.status,
-    summary: inc.summary,
-    created_dt: inc.created_dt ? inc.created_dt.toISOString() : null,
-    sla_dt: inc.sla_dt ? inc.sla_dt.toISOString() : null,
-    termino_dt: inc.termino_dt ? inc.termino_dt.toISOString() : null,
-    sla_met: inc.sla_met,
-    sprints: inc.sprints,
-    sn_id: inc.sn_id,
-  };
-}
 
 module.exports = router;

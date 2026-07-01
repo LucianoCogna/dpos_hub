@@ -199,48 +199,52 @@ function LinkedSubRow({ li }) {
   );
 }
 
-function ItemRow({ item, badge, badgeColor, accent, extra, extraColor, bg, delay=0 }) {
-  const [expanded, setExpanded] = useState(false);
-  const links = item.linked_issues || [];
-  const hasLinks = links.length > 0;
+function EpicPill({ parent }) {
+  if (!parent?.summary) return null;
+  const label = parent.summary.length > 24 ? parent.summary.slice(0, 24) + '…' : parent.summary;
+  return (
+    <span title={parent.summary} style={{
+      fontSize:9, background:T.purpleLight, color:T.purple,
+      border:`1px solid ${T.purple}22`, borderRadius:4,
+      padding:'1px 6px', fontWeight:600, whiteSpace:'nowrap',
+      overflow:'hidden', textOverflow:'ellipsis', maxWidth:130,
+      display:'inline-block', flexShrink:0,
+    }}>{label}</span>
+  );
+}
 
+function SizeBadge({ size }) {
+  if (!size) return null;
+  const code  = size.code?.replace('size-', '').toUpperCase() || '?';
+  const label = size.dn != null ? `${code} ${size.up}↑·${size.dn}↓` : `${code} Epic*`;
+  return (
+    <span style={{
+      fontSize:9, background:T.purpleSoft, color:T.purpleMid,
+      border:`1px solid ${T.purpleMid}22`, borderRadius:4,
+      padding:'1px 6px', fontWeight:700, whiteSpace:'nowrap', flexShrink:0,
+    }}>{label}</span>
+  );
+}
+
+function ItemRow({ item, badge, badgeColor, accent, extra, extraColor, bg, delay=0 }) {
   return (
     <div style={{ marginBottom:3, animationDelay:`${delay}ms` }}>
       <div className="sr2-item"
         style={{ display:'flex',alignItems:'center',gap:8,padding:'6px 10px',borderRadius:9,
           background:bg||'transparent', borderLeft:`3px solid ${accent||T.purpleMid}` }}>
-        {/* Expand toggle */}
-        {hasLinks ? (
-          <button onClick={() => setExpanded((v)=>!v)} style={{
-            background:'none', border:'none', cursor:'pointer', padding:0,
-            color:T.purpleMid, fontSize:11, fontWeight:800, flexShrink:0, width:14,
-          }}>{expanded ? '▾' : '▸'}</button>
-        ) : (
-          <span style={{ width:14, flexShrink:0 }} />
-        )}
         <a href={`${JIRA}/browse/${item.key}`} target="_blank" rel="noreferrer"
           style={{ display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0,textDecoration:'none' }}>
           <span style={{ color:T.purpleMid,fontWeight:800,fontSize:10,flexShrink:0,minWidth:60 }}>{item.key}</span>
+          {item.parent && <EpicPill parent={item.parent} />}
           <span style={{ color:T.textSec,fontSize:11,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}
             title={item.summary}>{item.summary}</span>
         </a>
-        <div style={{ display:'flex',gap:4,flexShrink:0 }}>
+        <div style={{ display:'flex',gap:4,flexShrink:0,alignItems:'center' }}>
+          <SizeBadge size={item.size} />
           {extra && <Chip text={extra}  color={extraColor||T.orange} />}
           {badge && <Chip text={badge}  color={badgeColor||T.purpleMid} />}
-          {hasLinks && (
-            <span style={{ fontSize:9, color:T.textMut, background:T.purpleLight,
-              padding:'1px 6px', borderRadius:10, fontWeight:600 }}>
-              {links.length} link{links.length>1?'s':''}
-            </span>
-          )}
         </div>
       </div>
-      {/* Sub-itens expandidos */}
-      {expanded && hasLinks && (
-        <div className="sr2-fade-in" style={{ marginLeft:22, marginTop:2 }}>
-          {links.map((li) => <LinkedSubRow key={li.key} li={li} />)}
-        </div>
-      )}
     </div>
   );
 }
@@ -347,20 +351,30 @@ function GanttFilters({ filters, onChange }) {
 // Gantt moderno
 // ─────────────────────────────────────────────────────────────────────────────
 function ModernGantt({ items, sprintsCalendar, sprintOrder, currentSprint, nextSprint, today, filters }) {
-  if (!items?.length) return <Empty label="Nenhum épico no cronograma." />;
+  if (!items?.length) return <Empty label="Nenhum item no cronograma." />;
 
   const curIdx = sprintOrder.indexOf(currentSprint);
+
+  // Calcula range de sprints visíveis: mín. 6, estende para cobrir projeções por size
   let endIdx = curIdx + 5;
   for (const it of items) {
-    if (!it.end) continue;
-    const endD = new Date(it.end);
-    for (let i = curIdx; i < sprintOrder.length; i++) {
-      if (endD <= new Date(sprintsCalendar[sprintOrder[i]]?.end)) { endIdx = Math.max(endIdx, i+1); break; }
+    const itemIdx = sprintOrder.indexOf(it.sprint);
+    if (itemIdx < 0) continue;
+    const sz = it.size || { up: 1, dn: 1 };
+    let proj;
+    if (['Backlog', 'Refinamento'].includes(it.status)) {
+      proj = itemIdx + (sz.up || 1) + (sz.dn ?? 1) + 1; // UP + DN + HM
+    } else if (it.status === 'Em Andamento') {
+      proj = curIdx + (sz.dn ?? 1) + 1;
+    } else {
+      proj = curIdx + 1;
     }
+    endIdx = Math.max(endIdx, proj);
   }
   endIdx = Math.min(endIdx, sprintOrder.length - 1);
   const visible = sprintOrder.slice(curIdx, endIdx + 1);
 
+  // PI header groups
   const piColors = { '26.2':T.purple, '26.3':T.purpleMid, '26.4':'#9B59B6' };
   const piGroups = [];
   let lastPi = null;
@@ -370,34 +384,70 @@ function ModernGantt({ items, sprintsCalendar, sprintOrder, currentSprint, nextS
     else piGroups[piGroups.length-1].count++;
   }
 
-  function colOf(dateStr) {
-    if (!dateStr) return null;
-    const d = new Date(dateStr);
-    for (let i = 0; i < visible.length; i++) {
-      const cal = sprintsCalendar[visible[i]];
-      if (!cal) continue;
-      if (d >= new Date(cal.start) && d <= new Date(cal.end)) return i;
+  // Calcula barras por size a partir da sprint do card
+  function getBars(it) {
+    const bars = {};
+    const itemIdx = sprintOrder.indexOf(it.sprint);
+    if (itemIdx < 0) return bars;
+    const sz       = it.size || { up: 1, dn: 1 };
+    const isEpicSz = it.size?.code === 'size-Epic';
+
+    if (['Backlog', 'Refinamento'].includes(it.status)) {
+      for (let i = 0; i < (sz.up || 1); i++) {
+        const sp = sprintOrder[itemIdx + i];
+        if (sp) bars[sp] = isEpicSz ? 'UP_EPIC' : 'UP';
+      }
+      if (!isEpicSz) {
+        for (let i = 0; i < (sz.dn ?? 1); i++) {
+          const sp = sprintOrder[itemIdx + (sz.up || 1) + i];
+          if (sp) bars[sp] = 'DN';
+        }
+        const hmSp = sprintOrder[itemIdx + (sz.up || 1) + (sz.dn ?? 1)];
+        if (hmSp) bars[hmSp] = 'HM';
+      } else {
+        // size-Epic: 1 UP + coluna tracejada TBD
+        const tbdSp = sprintOrder[itemIdx + 1];
+        if (tbdSp) bars[tbdSp] = 'TBD';
+      }
+    } else if (it.status === 'Em Andamento') {
+      for (let i = 0; i < (sz.dn ?? 1); i++) {
+        const sp = sprintOrder[curIdx + i];
+        if (sp) bars[sp] = 'DN';
+      }
+      const hmSp = sprintOrder[curIdx + (sz.dn ?? 1)];
+      if (hmSp) bars[hmSp] = 'HM';
+    } else if (['Homologação', 'Concluído'].includes(it.status)) {
+      const sp = sprintOrder[curIdx];
+      if (sp) bars[sp] = 'HM';
+    } else if (it.status === 'Bloqueado') {
+      const sp = sprintOrder[itemIdx];
+      if (sp) bars[sp] = 'BLK';
     }
-    if (d < new Date(sprintsCalendar[visible[0]]?.start)) return 0;
-    return visible.length - 1;
+    return bars;
   }
 
-  const todayD = new Date(today);
-  const curCal = sprintsCalendar[currentSprint];
+  const barStyle = {
+    UP:      { bg:`linear-gradient(90deg,${T.purple},${T.purpleMid})`,  shadow:T.purpleGlow, label:'UP' },
+    UP_EPIC: { bg:T.purpleLight, shadow:T.purpleGlow, label:'Epic*', border:`2px dashed ${T.purple}`, color:T.purple },
+    TBD:     { bg:'transparent', shadow:'none', label:'* TBD', border:`2px dashed ${T.purpleMid}55`, color:T.purpleMid },
+    DN:      { bg:`linear-gradient(90deg,${T.purpleMid},#9B59B6)`,      shadow:T.purpleGlow, label:'DN' },
+    HM:      { bg:`linear-gradient(90deg,${T.orange},#FFAB00)`,         shadow:T.orangeGlow, label:'HM' },
+    BLK:     { bg:T.redLight, shadow:T.redGlow, label:'BLK', border:`2px solid ${T.red}55`, color:T.red },
+  };
+
+  const LABEL_W = 170;
+  const rowH    = Math.max(28, Math.min(36, 400 / Math.max(items.length, 1)));
+
+  const todayD    = new Date(today);
+  const curCal    = sprintsCalendar[currentSprint];
   const curVisIdx = visible.indexOf(currentSprint);
-  let todayPct = null;
+  let todayPct    = null;
   if (curCal && curVisIdx >= 0) {
     const frac = Math.min(1, Math.max(0, (todayD - new Date(curCal.start)) / (new Date(curCal.end) - new Date(curCal.start))));
     todayPct = ((curVisIdx + frac) / visible.length) * 100;
   }
 
-  const LABEL_W = 72;
-  const rowH = Math.max(22, Math.min(28, 300 / items.length));
-  const barStyle = {
-    UP: { bg:`linear-gradient(90deg,${T.purple},${T.purpleMid})`, shadow:T.purpleGlow },
-    DN: { bg:`linear-gradient(90deg,${T.purpleMid},#9B59B6)`,     shadow:T.purpleGlow },
-    HM: { bg:`linear-gradient(90deg,${T.orange},#FFAB00)`,        shadow:T.orangeGlow },
-  };
+  const filterKey = { UP:'UP', UP_EPIC:'UP', TBD:'UP', DN:'DN', HM:'HM', BLK:'DN' };
 
   return (
     <div style={{ overflowX:'auto' }}>
@@ -412,9 +462,9 @@ function ModernGantt({ items, sprintsCalendar, sprintOrder, currentSprint, nextS
       <div style={{ display:'flex', marginLeft:LABEL_W, borderBottom:`2px solid ${T.border}` }}>
         {visible.map((sp) => (
           <div key={sp} style={{ flex:1,textAlign:'center',padding:'4px 2px',fontSize:9.5,
-            color: sp===currentSprint?T.purple:T.textMut,
-            fontWeight: sp===currentSprint?800:400,
-            background: sp===currentSprint?T.purpleLight: sp===nextSprint?T.yellowLight:'transparent',
+            color:sp===currentSprint?T.purple:T.textMut,
+            fontWeight:sp===currentSprint?800:400,
+            background:sp===currentSprint?T.purpleLight:sp===nextSprint?T.yellowLight:'transparent',
           }}>{sp}</div>
         ))}
       </div>
@@ -426,30 +476,51 @@ function ModernGantt({ items, sprintsCalendar, sprintOrder, currentSprint, nextS
             <span style={{ position:'absolute',top:-18,left:4,fontSize:9,color:T.red,fontWeight:700,whiteSpace:'nowrap',background:T.redLight,padding:'1px 5px',borderRadius:4 }}>HOJE</span>
           </div>
         )}
+
         {items.map((it, rowIdx) => {
-          const si = colOf(it.start);
-          const ei = colOf(it.end);
+          const bars       = getBars(it);
+          const parentName = it.parent?.summary || '';
+          const sizeLabel  = it.size
+            ? `${it.size.code?.replace('size-','').toUpperCase()} ${it.size.up}↑·${it.size.dn ?? 'TBD'}↓`
+            : '';
           return (
-            <div key={it.key} className="sr2-fade-up" style={{ display:'flex',height:rowH,alignItems:'center',borderBottom:`1px solid ${T.border}`,animationDelay:`${rowIdx*25}ms` }}>
-              <div style={{ width:LABEL_W,flexShrink:0,paddingRight:8,textAlign:'right' }}>
+            <div key={it.key} className="sr2-fade-up" style={{ display:'flex',height:rowH,alignItems:'center',borderBottom:`1px solid ${T.border}`,animationDelay:`${rowIdx*20}ms` }}>
+              {/* Label */}
+              <div style={{ width:LABEL_W,flexShrink:0,paddingRight:8,overflow:'hidden' }}>
                 <a href={`${JIRA}/browse/${it.key}`} target="_blank" rel="noreferrer"
-                  style={{ color:T.purpleMid,fontSize:10,fontWeight:700,textDecoration:'none' }}>{it.key}</a>
+                  style={{ color:T.purpleMid,fontSize:10,fontWeight:700,textDecoration:'none',display:'block',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
+                  {it.key}
+                </a>
+                {parentName && (
+                  <div style={{ fontSize:8,color:T.purple,background:T.purpleLight,borderRadius:3,padding:'1px 4px',marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
+                    {parentName.length > 26 ? parentName.slice(0,26)+'…' : parentName}
+                  </div>
+                )}
+                {sizeLabel && <div style={{ fontSize:8,color:T.textMut,marginTop:1 }}>{sizeLabel}</div>}
               </div>
-              {visible.map((sp, i) => {
-                const isCur = sp===currentSprint, isNxt = sp===nextSprint;
-                const cellBg = isCur?T.purpleLight: isNxt?T.yellowLight:'transparent';
-                let bar = null;
-                if (filters.UP && si !== null && i === si) bar = 'UP';
-                if (ei !== null) {
-                  const dnStart = (si !== null && ei > si) ? si+1 : (si ?? ei);
-                  if (filters.DN && i >= dnStart && i <= ei) bar = 'DN';
-                  if (filters.HM && i === ei+1 && i < visible.length) bar = 'HM';
-                }
+
+              {/* Sprint cells */}
+              {visible.map((sp) => {
+                const isCur  = sp === currentSprint;
+                const isNxt  = sp === nextSprint;
+                const cellBg = isCur ? T.purpleLight : isNxt ? T.yellowLight : 'transparent';
+                const barType = bars[sp];
+                const fk     = barType ? filterKey[barType] : null;
+                const active = barType && (filters?.[fk] !== false);
+                const bst    = barType ? barStyle[barType] : null;
                 return (
                   <div key={sp} style={{ flex:1,height:'100%',background:cellBg,borderRight:`1px solid ${T.border}`,display:'flex',alignItems:'center',justifyContent:'center',padding:'3px 2px' }}>
-                    {bar && (
-                      <div className="sr2-bar-fill" style={{ width:'88%',height:rowH*.52,background:barStyle[bar].bg,borderRadius:5,boxShadow:`0 2px 8px ${barStyle[bar].shadow}`,display:'flex',alignItems:'center',justifyContent:'center' }}>
-                        {rowH >= 18 && <span style={{ color:T.white,fontSize:8,fontWeight:800 }}>{bar}</span>}
+                    {active && bst && (
+                      <div className="sr2-bar-fill" style={{
+                        width:'88%', height:rowH*.52,
+                        background:bst.bg, borderRadius:5,
+                        boxShadow:`0 2px 6px ${bst.shadow}`,
+                        border:bst.border||'none',
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                      }}>
+                        {rowH >= 20 && (
+                          <span style={{ color:bst.color||T.white, fontSize:8, fontWeight:800 }}>{bst.label}</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -462,15 +533,12 @@ function ModernGantt({ items, sprintsCalendar, sprintOrder, currentSprint, nextS
 
       {/* Legenda */}
       <div style={{ display:'flex',gap:16,marginTop:10,flexWrap:'wrap' }}>
-        {Object.entries(barStyle).map(([key, { bg }]) => {
-          const labels = { UP:'Upstream', DN:'Downstream', HM:'Homologação' };
-          return (
-            <div key={key} style={{ display:'flex',alignItems:'center',gap:6,opacity:filters[key]?1:.35,transition:'opacity .2s' }}>
-              <div style={{ width:22,height:8,background:bg,borderRadius:3 }} />
-              <span style={{ fontSize:10.5,color:T.textSec }}>{key} — {labels[key]}</span>
-            </div>
-          );
-        })}
+        {[['UP',`linear-gradient(90deg,${T.purple},${T.purpleMid})`,'Upstream'],['DN',`linear-gradient(90deg,${T.purpleMid},#9B59B6)`,'Downstream'],['HM',`linear-gradient(90deg,${T.orange},#FFAB00)`,'Homologação']].map(([key,bg,label]) => (
+          <div key={key} style={{ display:'flex',alignItems:'center',gap:6,opacity:filters?.[key]!==false?1:.35,transition:'opacity .2s' }}>
+            <div style={{ width:22,height:8,background:bg,borderRadius:3 }} />
+            <span style={{ fontSize:10.5,color:T.textSec }}>{key} — {label}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -610,12 +678,26 @@ function SprintCol({ title, accentGrad, items_data, sprintsCalendar, currentSpri
               <SectionLabel text={`${sectionTitle} · ${items.length}`} color={color} />
               {items.length===0 ? <Empty /> : items.map((it, i) => {
                 let badge,badgeColor,extra,extraColor,accent,bg;
-                if (kind==='upstream')      { accent=T.yellow; extra=it.status; extraColor=T.textSec; }
-                else if (kind==='downstream') { badge=it.end?fmtDate(it.end):'DN'; badgeColor=T.purpleMid; accent=T.purpleMid; if(it._atraso){extra=`↻ ${it._atraso}d`;extraColor=T.orange;} }
-                else if (kind==='homolog')  { const d=it._dias_homolog; badge=d!=null?(d>15?`⚠ ${d}d`:`${d}d`):'Hom.'; badgeColor=d>15?T.red:T.orange; accent=T.orange; }
-                else if (kind==='blocked')  { accent=T.red; bg=T.redLight; }
-                else if (kind==='done')     { badge=it.implant?fmtFull(it.implant):'✓'; badgeColor=T.green; accent=T.green; bg=T.greenLight; }
-                else if (kind==='next_homolog') { badge=it._badge||'Hom.'; badgeColor=T.orange; accent=T.orange; }
+                if (kind==='upstream') {
+                  accent=T.yellow;
+                  if (it.duedate) { badge=`até ${fmtDate(it.duedate)}`; badgeColor=T.yellow; }
+                } else if (kind==='downstream') {
+                  accent=T.purpleMid; badge=it.sprint||'DN'; badgeColor=T.purpleMid;
+                  if (it._atraso) { extra=`↻ Tombou ${it._atraso}d`; extraColor=T.orange; }
+                } else if (kind==='homolog') {
+                  accent=T.orange;
+                  const d=it._dias_homolog;
+                  badge=d!=null?(d>15?`⚠ ${d}d`:`${d}d`):'Hom.';
+                  badgeColor=d!=null&&d>15?T.red:T.orange;
+                } else if (kind==='blocked') {
+                  accent=T.red; bg=T.redLight;
+                } else if (kind==='done') {
+                  badge=it.implant?fmtFull(it.implant):'✓'; badgeColor=T.green; accent=T.green; bg=T.greenLight;
+                } else if (kind==='next_homolog') {
+                  badge=it._badge||'Hom.'; badgeColor=T.orange; accent=T.orange;
+                } else if (kind==='next_downstream') {
+                  accent=T.purpleMid; badge=it._badge||'UP→DN'; badgeColor=T.purpleMid;
+                }
                 return <ItemRow key={it.key+kind} item={it} badge={badge} badgeColor={badgeColor} accent={accent} extra={extra} extraColor={extraColor} bg={bg} delay={i*30} />;
               })}
             </div>
@@ -1366,50 +1448,95 @@ export default function StatusReportV2() {
           {/* Tab: Cronograma */}
           {tab==='cronograma' && (
             <div>
+              {/* Linha superior: sidebar PI + Gantt */}
               <div style={{ display:'flex',gap:14,marginBottom:14 }}>
                 <PiSidebar piMetrics={pi_metrics} cls={cls} delay={0} />
                 <Card delay={100} style={{ flex:1,padding:18 }}>
                   <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8 }}>
-                    <div style={{ fontSize:13,fontWeight:700,color:T.textPrim }}>Cronograma — Épicos Ativos e Backlog Planejado</div>
+                    <div style={{ fontSize:13,fontWeight:700,color:T.textPrim }}>Cronograma — Histórias Ativas e Backlog Planejado</div>
                     <GanttFilters filters={ganttFilters} onChange={toggleGantt} />
                   </div>
                   <ModernGantt items={cls.gantt_full} sprintsCalendar={sprints_calendar} sprintOrder={sprint_order} currentSprint={current_sprint} nextSprint={next_sprint} today={today} filters={ganttFilters} />
                 </Card>
               </div>
 
-              {/* Sem Priorização */}
-              <Card delay={200} style={{ padding:18 }}>
-                <SectionLabel text={`Sem Priorização · ${cls.sem_priorizacao.length}`} color={T.red} icon="⚠️" />
-                <div style={{ fontSize:11,color:T.textMut,marginBottom:12,marginTop:-4 }}>itens em Backlog ou Funil sem data de início nem fim</div>
-                {cls.sem_priorizacao.length === 0
-                  ? <Empty label="Nenhum item sem priorização" />
-                  : (
-                    <div>
-                      {/* header */}
-                      <div style={{ display:'grid', gridTemplateColumns:'90px 1fr 80px', gap:8,
-                        padding:'4px 10px', fontSize:10, fontWeight:700, color:T.textMut,
-                        borderBottom:`1px solid ${T.border}`, marginBottom:2 }}>
-                        <span>#</span><span>Título</span><span style={{ textAlign:'right' }}>Status</span>
-                      </div>
-                      {cls.sem_priorizacao.map((it, i) => (
-                        <div key={it.key}
-                          style={{ display:'grid', gridTemplateColumns:'90px 1fr 80px', gap:8,
-                            alignItems:'center', padding:'6px 10px', fontSize:12,
-                            background: i%2===0 ? `${T.red}08` : 'transparent',
-                            borderBottom:`1px solid ${T.border}44` }}>
+              {/* Linha inferior: Bloqueados | Finalizados | Sem Priorização */}
+              <div style={{ display:'flex',gap:14,alignItems:'flex-start' }}>
+
+                {/* Bloqueados — todos, independente de sprint */}
+                <Card delay={200} style={{ flex:1,padding:18 }}>
+                  <SectionLabel text={`Bloqueados · ${(cls.all_blocked||[]).length}`} color={T.red} icon="🔴" />
+                  <div style={{ fontSize:11,color:T.textMut,marginBottom:10,marginTop:-4 }}>todas as histórias bloqueadas da área</div>
+                  {!(cls.all_blocked||[]).length
+                    ? <Empty label="Nenhum item bloqueado" />
+                    : (cls.all_blocked||[]).map((it,i) => (
+                        <ItemRow key={it.key} item={it} accent={T.red} bg={T.redLight} delay={i*25} />
+                      ))
+                  }
+                </Card>
+
+                {/* Finalizados — agrupados por PI > Sprint */}
+                <Card delay={240} style={{ flex:2,padding:18 }}>
+                  <SectionLabel text={`Finalizados · ${(cls.finalizados||[]).length}`} color={T.green} icon="✅" />
+                  <div style={{ fontSize:11,color:T.textMut,marginBottom:10,marginTop:-4 }}>Pronto / Em produção / Aceito com data de implantação</div>
+                  {!(cls.finalizados||[]).length
+                    ? <Empty label="Nenhum finalizado encontrado" />
+                    : (() => {
+                        // Agrupa por PI (primeiros 4 chars da sprint) > Sprint
+                        const byPi = {};
+                        for (const it of (cls.finalizados||[])) {
+                          const pi = it.sprint?.slice(0,4) || 'Sem PI';
+                          const sp = it.sprint || 'Sem sprint';
+                          if (!byPi[pi]) byPi[pi] = {};
+                          if (!byPi[pi][sp]) byPi[pi][sp] = [];
+                          byPi[pi][sp].push(it);
+                        }
+                        return Object.entries(byPi).sort().map(([pi, bySprint]) => (
+                          <div key={pi} style={{ marginBottom:14 }}>
+                            <div style={{ fontSize:10,fontWeight:800,color:T.purple,letterSpacing:1,marginBottom:6,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`,paddingBottom:4 }}>
+                              PI {pi}
+                            </div>
+                            {Object.entries(bySprint).sort().map(([sp, spItems]) => (
+                              <div key={sp} style={{ marginBottom:8 }}>
+                                <div style={{ fontSize:9.5,fontWeight:700,color:T.textMut,marginBottom:3,paddingLeft:6 }}>
+                                  Sprint {sp} · {spItems.length}
+                                </div>
+                                {spItems.map((it) => (
+                                  <ItemRow key={it.key} item={it}
+                                    badge={it.implant ? fmtFull(it.implant) : '✓'}
+                                    badgeColor={T.green} accent={T.green} bg={T.greenLight}
+                                  />
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        ));
+                      })()
+                  }
+                </Card>
+
+                {/* Sem Priorização */}
+                <Card delay={280} style={{ flex:1,padding:18 }}>
+                  <SectionLabel text={`Sem Priorização · ${(cls.sem_priorizacao||[]).length}`} color={T.orange} icon="⚠️" />
+                  <div style={{ fontSize:11,color:T.textMut,marginBottom:10,marginTop:-4 }}>histórias sem sprint alocada</div>
+                  {!(cls.sem_priorizacao||[]).length
+                    ? <Empty label="Nenhum item sem priorização" />
+                    : (cls.sem_priorizacao||[]).map((it,i) => (
+                        <div key={it.key} style={{ display:'flex',alignItems:'center',gap:8,padding:'5px 8px',fontSize:12,
+                          background:i%2===0?`${T.orange}08`:'transparent',borderBottom:`1px solid ${T.border}44`,borderRadius:6 }}>
                           <a href={`${JIRA}/browse/${it.key}`} target="_blank" rel="noreferrer"
-                            style={{ color:T.red, fontWeight:700, textDecoration:'none', whiteSpace:'nowrap' }}>
+                            style={{ color:T.orange,fontWeight:700,textDecoration:'none',fontSize:10,flexShrink:0 }}>
                             {it.key}
                           </a>
-                          <span style={{ color:T.textPrim, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}
+                          {it.parent && <EpicPill parent={it.parent} />}
+                          <span style={{ color:T.textPrim,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontSize:11 }}
                             title={it.summary}>{it.summary}</span>
-                          <span style={{ textAlign:'right', fontSize:10.5, color:T.textMut, fontStyle:'italic' }}>{it.status}</span>
+                          <span style={{ fontSize:9,color:T.orange,fontWeight:700,background:`${T.orange}15`,padding:'1px 6px',borderRadius:4,flexShrink:0 }}>Não priorizado</span>
                         </div>
-                      ))}
-                    </div>
-                  )
-                }
-              </Card>
+                      ))
+                  }
+                </Card>
+              </div>
             </div>
           )}
 
