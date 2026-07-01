@@ -251,9 +251,9 @@ function classify(items, today, currentSprint, nextSp) {
 
   const t = today || new Date();
 
-  const DONE_STATUSES    = ['Pronto', 'Em produção', 'Aceito'];
-  const HOMOLOG_STATUSES = ['Homologação'];
-  const UPSTREAM_STATUSES = ['Refinamento', 'Backlog', 'Concluído'];
+  const DONE_STATUSES     = ['Pronto', 'Em produção', 'Aceito'];
+  const HOMOLOG_STATUSES  = ['Homologação', 'Concluído'];
+  const UPSTREAM_STATUSES = ['Refinamento', 'Backlog'];
 
   for (const it of items) {
     const { status, sprint, duedate, implant, size } = it;
