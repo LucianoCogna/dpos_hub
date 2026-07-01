@@ -148,7 +148,6 @@ const DAPL_FIELDS = [
   'customfield_10020',   // Sprint alocada no board
   'components',          // size-PP / size-P / size-M / size-G / size-GG / size-Epic
   'parent',              // épico pai (key + summary)
-  'issuelinks',          // mantido para compatibilidade
 ];
 
 const INCIDENT_FIELDS = [
@@ -194,7 +193,6 @@ function mapDaplItem(issue) {
     sprints_count,
     size,
     parent,
-    linked_issues: [], // mantido para compatibilidade
   };
 }
 
@@ -257,6 +255,9 @@ function classify(items, today, currentSprint, nextSp) {
 
   for (const it of items) {
     const { status, sprint, duedate, implant, size } = it;
+
+    // ── Cancelados: ignorados em todas as visões ───────────────────────────
+    if (status === 'Cancelado') continue;
 
     // ── Bloqueados ─────────────────────────────────────────────────────────
     if (status === 'Bloqueado') {
@@ -374,7 +375,6 @@ function serializeItem(it) {
     _atraso:       it._atraso ?? null,
     _dias_homolog: it._dias_homolog ?? null,
     _badge:        it._badge ?? null,
-    linked_issues: it.linked_issues ?? [],
   };
 }
 
