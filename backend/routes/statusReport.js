@@ -60,6 +60,7 @@ const AREA_CONFIG = {
   'Plurall':             { label: 'Plurall',             denaEpic: null,        page3: false },
   'MACROPROCESSO':       { label: 'MACROPROCESSO',       denaEpic: null,        page3: false },
   'ESG':                 { label: 'ESG',                 denaEpic: null,        page3: false },
+  'VOOMP':               { label: 'VOOMP',               denaEpic: null,        page3: false },
 };
 
 // ── Date helpers ─────────────────────────────────────────────────────────────

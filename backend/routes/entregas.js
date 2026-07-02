@@ -5,7 +5,7 @@ const router  = express.Router();
 const AREAS = [
   'G&C', 'CAPTACAO_ANALITICA', 'REVENUE', 'ROTINAS_FINANCEIRAS',
   'DMC', 'REVENUE_STRATEGY', 'RVV', 'REPASSE',
-  'ALIANCA_1_SOMOS', 'ALIANCA_1_SABER', 'Plurall', 'MACROPROCESSO', 'ESG',
+  'ALIANCA_1_SOMOS', 'ALIANCA_1_SABER', 'Plurall', 'MACROPROCESSO', 'ESG', 'VOOMP',
 ];
 
 // chave interna → label exata no Jira
