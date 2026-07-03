@@ -408,9 +408,9 @@ router.get('/status-report', async (req, res) => {
       : deriveCurrentSprint(today);
     const nextSp = nextSprint(currentSprint);
 
-    // Apenas Histórias — épicos nunca são exibidos, parent vem via campo "parent"
+    // Apenas Histórias do projeto DAPL — épicos nunca são exibidos, parent vem via campo "parent"
     const storyIssues = await fetchAll(
-      `labels = "${config.label}" AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`,
+      `project = DAPL AND labels = "${config.label}" AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`,
       DAPL_FIELDS
     ).catch(() => []);
     const items = storyIssues.map(mapDaplItem);
