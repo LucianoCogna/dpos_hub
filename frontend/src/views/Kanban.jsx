@@ -181,6 +181,7 @@ function KanbanColumn({ status, epics, onDrop, onDragOver, onDragLeave, isDragOv
 export default function Kanban() {
   const [epics, setEpics] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterProjects, setFilterProjects] = useState([]);
@@ -193,9 +194,10 @@ export default function Kanban() {
 
   const load = () => {
     setLoading(true);
+    setLoadError(null);
     getMacroprocessos()
-      .then(setEpics)
-      .catch(() => {})
+      .then((data) => { setEpics(data); })
+      .catch((err) => setLoadError(err.response?.data?.error || err.message))
       .finally(() => setLoading(false));
   };
 
@@ -318,6 +320,12 @@ export default function Kanban() {
 
         <span className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} itens</span>
       </div>
+
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+          <strong>Erro ao carregar:</strong> {loadError}
+        </div>
+      )}
 
       {loading && (
         <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm animate-pulse">

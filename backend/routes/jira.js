@@ -162,6 +162,16 @@ router.get('/macroprocessos', async (req, res) => {
   }
 });
 
+// GET /api/debug-macroprocessos — lista chaves e tipos para debug
+router.get('/debug-macroprocessos', async (req, res) => {
+  try {
+    const issues = await fetchAll('labels = "MACROPROCESSO" ORDER BY key ASC', ['summary', 'issuetype', 'status']);
+    res.json(issues.map((i) => ({ key: i.key, type: i.fields.issuetype?.name, status: i.fields.status?.name })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/jira/issue/:key/transition — altera status via workflow do Jira
 router.post('/jira/issue/:key/transition', async (req, res) => {
   try {
