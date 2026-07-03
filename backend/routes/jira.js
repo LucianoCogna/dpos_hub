@@ -128,34 +128,34 @@ router.get('/epics', async (req, res) => {
   }
 });
 
-// GET /api/macroprocessos — épicos e histórias com label MACROPROCESSO
+// GET /api/macroprocessos — todos os tipos com label MACROPROCESSO
 router.get('/macroprocessos', async (req, res) => {
   try {
     const base = process.env.JIRA_BASE_URL;
     const fields = ['summary', 'status', 'assignee', 'reporter', 'issuetype', 'parent'];
 
-    const [epics, stories] = await Promise.all([
-      fetchAll('issuetype = Epic AND labels = "MACROPROCESSO" ORDER BY key ASC', fields),
-      fetchAll('issuetype in ("História", Story, Subtask) AND labels = "MACROPROCESSO" ORDER BY key ASC', fields),
-    ]);
+    const allIssues = await fetchAll('labels = "MACROPROCESSO" ORDER BY key ASC', fields);
 
-    const format = (issue, type) => ({
-      key: issue.key,
-      summary: issue.fields.summary,
-      status: issue.fields.status.name,
-      assignee: issue.fields.assignee?.displayName || null,
-      reporter: issue.fields.reporter?.displayName || null,
-      reporter_account_id: issue.fields.reporter?.accountId || null,
-      type,
-      parent_key: issue.fields.parent?.key || null,
-      parent_summary: issue.fields.parent?.fields?.summary || null,
-      link: `${base}/browse/${issue.key}`,
-    });
+    const format = (issue) => {
+      const rawType = issue.fields.issuetype?.name || '';
+      const lower   = rawType.toLowerCase();
+      const type    = (lower.includes('epic') || lower.includes('épico')) ? 'epic' : 'story';
+      return {
+        key:                issue.key,
+        summary:            issue.fields.summary,
+        status:             issue.fields.status.name,
+        assignee:           issue.fields.assignee?.displayName || null,
+        reporter:           issue.fields.reporter?.displayName || null,
+        reporter_account_id: issue.fields.reporter?.accountId || null,
+        type,
+        issuetype:          rawType,
+        parent_key:         issue.fields.parent?.key || null,
+        parent_summary:     issue.fields.parent?.fields?.summary || null,
+        link:               `${base}/browse/${issue.key}`,
+      };
+    };
 
-    res.json([
-      ...epics.map((e) => format(e, 'epic')),
-      ...stories.map((s) => format(s, 'story')),
-    ]);
+    res.json(allIssues.map(format));
   } catch (error) {
     console.error(error.response?.data || error.message);
     res.status(500).json({ error: 'Erro ao buscar macroprocessos do Jira' });

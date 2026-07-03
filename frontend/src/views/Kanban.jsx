@@ -70,12 +70,28 @@ const STATUSES = [
 ];
 
 const TYPE_CONFIG = {
-  epic:  { label: 'Épico',    icon: '⚡', border: 'border-l-violet-400',  badge: 'bg-violet-100 text-violet-700' },
-  story: { label: 'História', icon: '📋', border: 'border-l-sky-400',     badge: 'bg-sky-100 text-sky-700'      },
+  epic:  { icon: '⚡', border: 'border-l-violet-400', badge: 'bg-violet-100 text-violet-700' },
+  story: { icon: '📋', border: 'border-l-sky-400',    badge: 'bg-sky-100 text-sky-700'       },
 };
 
+const TYPE_OVERRIDES = {
+  bug:       { icon: '🐛', border: 'border-l-red-400',    badge: 'bg-red-100 text-red-700'       },
+  incidente: { icon: '🚨', border: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700' },
+  tarefa:    { icon: '✅', border: 'border-l-green-400',  badge: 'bg-green-100 text-green-700'   },
+  subtask:   { icon: '↳',  border: 'border-l-gray-400',   badge: 'bg-gray-100 text-gray-600'     },
+};
+
+function getTypeConfig(item) {
+  const base = TYPE_CONFIG[item.type] || TYPE_CONFIG.story;
+  const name = (item.issuetype || '').toLowerCase();
+  for (const [key, cfg] of Object.entries(TYPE_OVERRIDES)) {
+    if (name.includes(key)) return { ...base, ...cfg, label: item.issuetype };
+  }
+  return { ...base, label: item.issuetype || (item.type === 'epic' ? 'Épico' : 'História') };
+}
+
 function EpicCard({ epic, onDragStart, transitioning, onClick }) {
-  const cfg = TYPE_CONFIG[epic.type] || TYPE_CONFIG.story;
+  const cfg = getTypeConfig(epic);
   return (
     <div
       draggable
