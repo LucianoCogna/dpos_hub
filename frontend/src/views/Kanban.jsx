@@ -245,7 +245,7 @@ export default function Kanban() {
 
   const filtered = epics
     .filter((e) => !filterAssignee || e.assignee === filterAssignee)
-    .filter((e) => !filterType     || e.type === filterType)
+    .filter((e) => !filterType || e.type === filterType)
     .filter((e) => filterProjects.length === 0 || filterProjects.includes(getProject(e.key)))
     .filter((e) => !filterStatus   || e.status === filterStatus);
 
@@ -293,7 +293,7 @@ export default function Kanban() {
           onChange={(e) => setFilterType(e.target.value)}
           className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
         >
-          <option value="">Épicos e Histórias</option>
+          <option value="">Todos os tipos</option>
           <option value="epic">⚡ Apenas Épicos</option>
           <option value="story">📋 Apenas Histórias</option>
         </select>
