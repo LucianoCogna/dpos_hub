@@ -76,6 +76,7 @@ const TYPE_CONFIG = {
 
 const TYPE_OVERRIDES = {
   bug:       { icon: '🐛', border: 'border-l-red-400',    badge: 'bg-red-100 text-red-700'       },
+  problema:  { icon: '⚠️', border: 'border-l-red-400',    badge: 'bg-red-100 text-red-700'       },
   incidente: { icon: '🚨', border: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700' },
   tarefa:    { icon: '✅', border: 'border-l-green-400',  badge: 'bg-green-100 text-green-700'   },
   subtask:   { icon: '↳',  border: 'border-l-gray-400',   badge: 'bg-gray-100 text-gray-600'     },
