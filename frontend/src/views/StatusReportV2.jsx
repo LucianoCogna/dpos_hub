@@ -928,7 +928,6 @@ function PdfContainer({ pdfRef, data, area, ganttFilters }) {
           <PdfStatChip label="Downstream"  value={cls.current_downstream.length+cls.next_downstream.length} color={T.purpleMid} />
           <PdfStatChip label="Homologação" value={cls.current_homolog.length}                               color={T.orange}    />
           <PdfStatChip label="Entregues"   value={cls.current_done.length}                                  color={T.green}     />
-          {has_incidents_page && <PdfStatChip label="Incidentes" value={incidents_summary.total} color={T.red} />}
         </div>
 
         {/* Sprint columns */}
@@ -1359,7 +1358,6 @@ export default function StatusReportV2() {
             <StatCard delay={120} label="Homologação" value={cls.current_homolog.length}                                color={T.orange}    glow={T.orangeGlow}  icon="🧪" sub={`${cls.next_homolog.length} prevista próxima`} />
             <StatCard delay={180} label="Entregues"   value={cls.current_done.length}                                  color={T.green}     glow={T.greenGlow}   icon="✅" sub={`${cls.finalizados.length} finalizados total`} />
             {cls.current_blocked.length > 0 && <StatCard delay={220} label="Bloqueados" value={cls.current_blocked.length} color={T.red} glow={T.redGlow} icon="🔴" />}
-            {has_incidents_page && <StatCard delay={260} label="Incidentes" value={incidents_summary.total} color={T.red} glow={T.redGlow} icon="🚨" sub={`${incidents_summary.aberto} em aberto`} />}
           </div>
 
           {/* Tabs */}
