@@ -57,7 +57,7 @@ router.get('/plataforma', async (req, res) => {
     const semEpico = [];
 
     for (const it of items) {
-      if (it.parent) {
+      if (it.parent && it.parent.key.startsWith('DDPL-')) {
         const { key, summary } = it.parent;
         if (!epicMap[key]) epicMap[key] = { key, summary, items: [] };
         epicMap[key].items.push(it);
