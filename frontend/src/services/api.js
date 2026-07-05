@@ -56,6 +56,9 @@ export const getStatusReport = (area = 'G&C', sprint = null) => {
   return api.get(`/status-report?${params}`).then((r) => r.data);
 };
 
+// Plataforma
+export const getPlataforma = () => api.get('/plataforma').then((r) => r.data);
+
 // Entregas
 export const getEntregas = (area = 'TODAS') => {
   const params = new URLSearchParams({ area });
