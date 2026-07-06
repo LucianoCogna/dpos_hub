@@ -7,86 +7,91 @@ function getHeaders() {
   return { Authorization: `Basic ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
 }
 
-async function fetchAll(jql, fields, maxPages = 30) {
-  const url    = `${process.env.JIRA_BASE_URL}/rest/api/3/search/jql`;
-  const issues = [];
-  let nextPageToken;
-  let page = 0;
-  while (page < maxPages) {
-    const payload = { jql, fields, maxResults: 100 };
-    if (nextPageToken) payload.nextPageToken = nextPageToken;
-    const { data } = await axios.post(url, payload, { headers: getHeaders(), timeout: 20000 });
-    issues.push(...(data.issues || []));
-    if (data.isLast || !data.nextPageToken || (data.issues || []).length === 0) break;
-    nextPageToken = data.nextPageToken;
-    page++;
-  }
-  return issues;
+async function fetchByKeys(keys, fields) {
+  const jql = `issueKey in (${keys.join(',')}) ORDER BY key ASC`;
+  const url  = `${process.env.JIRA_BASE_URL}/rest/api/3/search/jql`;
+  const { data } = await axios.post(url, { jql, fields, maxResults: 200 }, { headers: getHeaders(), timeout: 20000 });
+  return data.issues || [];
 }
 
-const PROJECTS = {
-  CRPR: { name: 'Pricing',   engineers: ['Glauber', 'Josielho Canuto'] },
-  CRMI: { name: 'Mídia',     engineers: ['Samuel Alexandre']           },
-  CRVE: { name: 'Conversão', engineers: ['Iago', 'Yuir']               },
+// ── Issues hardcodadas por engenheiro ─────────────────────────────────────────
+const CONFIG = {
+  CRPR: {
+    name: 'Pricing',
+    engineers: {
+      'Glauber':         ['CRPR-12', 'CRPR-4',  'CRPR-5'],
+      'Josielho Canuto': ['CRPR-14', 'CRPR-12', 'CRPR-8'],
+    },
+  },
+  CRMI: {
+    name: 'Mídia',
+    engineers: {
+      'Samuel Alexandre': ['CRMI-122', 'CRMI-124', 'CRMI-144'],
+    },
+  },
+  CRVE: {
+    name: 'Conversão',
+    engineers: {
+      'Iago': ['CRVE-69',  'CRVE-44'],
+      'Yuir': ['CRVE-122', 'CRVE-123'],
+    },
+  },
 };
 
-const FIELDS = ['summary', 'status', 'issuetype', 'assignee', 'priority', 'created', 'updated'];
+const DONE_STATUSES = new Set(['Concluído', 'Done', 'Aceito', 'Closed', 'Resolvido']);
 
-function matchEngineer(displayName, engineerList) {
-  if (!displayName) return null;
-  const lower = displayName.toLowerCase();
-  return engineerList.find((e) => {
-    const parts = e.toLowerCase().split(' ');
-    return parts.some((part) => lower.includes(part));
-  }) || null;
-}
+const FIELDS = ['summary', 'status', 'issuetype', 'assignee', 'priority', 'created', 'updated'];
 
 // GET /api/indicadores
 router.get('/indicadores', async (req, res) => {
   try {
-    const jql = `project in (CRPR, CRMI, CRVE) AND status != "Cancelado" ORDER BY updated DESC`;
-    const raw = await fetchAll(jql, FIELDS);
-
-    const result = {};
-    for (const [key, cfg] of Object.entries(PROJECTS)) {
-      result[key] = {
-        name:       cfg.name,
-        engineers:  cfg.engineers,
-        byAssignee: {},
-        outros:     [],
-        total:      0,
-      };
-      // Garante ordem dos engenheiros
-      for (const eng of cfg.engineers) {
-        result[key].byAssignee[eng] = [];
+    // Coleta todas as chaves únicas
+    const allKeys = [];
+    for (const proj of Object.values(CONFIG)) {
+      for (const keys of Object.values(proj.engineers)) {
+        for (const k of keys) {
+          if (!allKeys.includes(k)) allKeys.push(k);
+        }
       }
     }
 
+    const raw = await fetchByKeys(allKeys, FIELDS);
+
+    // Indexa por chave para lookup rápido
+    const byKey = {};
     for (const issue of raw) {
-      const proj = issue.key.split('-')[0];
-      if (!result[proj]) continue;
+      byKey[issue.key] = issue;
+    }
 
-      const f           = issue.fields;
-      const displayName = f.assignee?.displayName || null;
-      const matched     = matchEngineer(displayName, result[proj].engineers);
+    // Monta resultado agrupado
+    const result = {};
+    for (const [projKey, projCfg] of Object.entries(CONFIG)) {
+      const byAssignee = {};
 
-      const item = {
-        key:      issue.key,
-        summary:  f.summary || '',
-        status:   f.status?.name || '',
-        type:     f.issuetype?.name || '',
-        priority: f.priority?.name || 'Medium',
-        assignee: displayName,
-        created:  f.created ? f.created.slice(0, 10) : null,
-        updated:  f.updated ? f.updated.slice(0, 10) : null,
-      };
-
-      if (matched) {
-        result[proj].byAssignee[matched].push(item);
-      } else {
-        result[proj].outros.push(item);
+      for (const [eng, keys] of Object.entries(projCfg.engineers)) {
+        byAssignee[eng] = keys
+          .map((k) => {
+            const issue = byKey[k];
+            if (!issue) return null;
+            const f      = issue.fields;
+            const status = f.status?.name || '';
+            if (DONE_STATUSES.has(status)) return null; // exclui concluídas
+            return {
+              key:      issue.key,
+              summary:  f.summary || '',
+              status,
+              type:     f.issuetype?.name || '',
+              priority: f.priority?.name || 'Medium',
+              assignee: f.assignee?.displayName || null,
+              created:  f.created ? f.created.slice(0, 10) : null,
+              updated:  f.updated ? f.updated.slice(0, 10) : null,
+            };
+          })
+          .filter(Boolean);
       }
-      result[proj].total++;
+
+      const total = Object.values(byAssignee).reduce((s, arr) => s + arr.length, 0);
+      result[projKey] = { name: projCfg.name, byAssignee, outros: [], total };
     }
 
     res.json(result);
