@@ -1,326 +1,356 @@
-import { useState } from 'react';
-import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
-} from 'recharts';
+import { useState, useEffect } from 'react';
+import { getIndicadores } from '../services/api';
 
-// ── Mock data ────────────────────────────────────────────────────────────────
-const MOCK = {
-  sprint: '26.2.2',
-  total: 11,
-  entregues: 4,
-  transbordaram: 6,
-  bloqueados: 1,
-  taxa_entrega: 36,
-  deltas: { total: +2, entregues: -1, transbordaram: +2, bloqueados: 0, taxa: -8 },
-  por_dpo: [
-    { nome: 'Luciano', total: 8, entregues: 3 },
-    { nome: 'Erika',   total: 3, entregues: 1 },
-  ],
-  por_projeto: [
-    { nome: 'G&C',  total: 7 },
-    { nome: 'XPTO', total: 4 },
-  ],
-  evolucao: [
-    { sprint: '26.1.4', taxa: 55 },
-    { sprint: '26.1.5', taxa: 48 },
-    { sprint: '26.1.6', taxa: 60 },
-    { sprint: '26.2.1', taxa: 44 },
-    { sprint: '26.2.2', taxa: 36 },
-  ],
-  por_status: [
-    { status: 'Concluído',    total: 4 },
-    { status: 'Em Andamento', total: 3 },
-    { status: 'Backlog',      total: 2 },
-    { status: 'Homologação',  total: 1 },
-    { status: 'Bloqueado',    total: 1 },
-  ],
+const JIRA = 'https://cogna.atlassian.net';
+
+// ── Cores por status ──────────────────────────────────────────────────────────
+const STATUS_CFG = {
+  'Backlog':       { bg: 'bg-gray-100 dark:bg-gray-700',     text: 'text-gray-600 dark:text-gray-300'   },
+  'Em Andamento':  { bg: 'bg-blue-100 dark:bg-blue-900/40',  text: 'text-blue-700 dark:text-blue-300'   },
+  'In Progress':   { bg: 'bg-blue-100 dark:bg-blue-900/40',  text: 'text-blue-700 dark:text-blue-300'   },
+  'Homologação':   { bg: 'bg-amber-100 dark:bg-amber-900/40',text: 'text-amber-700 dark:text-amber-300' },
+  'Code Review':   { bg: 'bg-violet-100 dark:bg-violet-900/40', text: 'text-violet-700 dark:text-violet-300' },
+  'Concluído':     { bg: 'bg-green-100 dark:bg-green-900/40',text: 'text-green-700 dark:text-green-300' },
+  'Done':          { bg: 'bg-green-100 dark:bg-green-900/40',text: 'text-green-700 dark:text-green-300' },
+  'Aceito':        { bg: 'bg-green-100 dark:bg-green-900/40',text: 'text-green-700 dark:text-green-300' },
+  'Bloqueado':     { bg: 'bg-red-100 dark:bg-red-900/40',    text: 'text-red-700 dark:text-red-300'     },
 };
 
-// ── Colors ───────────────────────────────────────────────────────────────────
-const STATUS_COLOR = {
-  'Concluído':    '#22c55e',
-  'Aceito':       '#22c55e',
-  'Em Andamento': '#f59e0b',
-  'Homologação':  '#f97316',
-  'Bloqueado':    '#ef4444',
-  'Backlog':      '#9ca3af',
+// Cores de acento por projeto
+const PROJ_ACCENT = {
+  CRPR: { bar: 'bg-violet-500', badge: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300', dot: 'bg-violet-500' },
+  CRMI: { bar: 'bg-sky-500',    badge: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300',             dot: 'bg-sky-500'    },
+  CRVE: { bar: 'bg-emerald-500',badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
 };
-const PROJ_COLORS  = ['#8629ff', '#ab62ff', '#f97316', '#22c55e'];
-const BAR_COLORS   = { Entregues: '#22c55e', Transbordaram: '#f97316', Bloqueados: '#ef4444' };
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+const PRIORITY_DOT = {
+  Highest: 'bg-red-500', High: 'bg-red-400', Medium: 'bg-amber-400', Low: 'bg-green-400', Lowest: 'bg-green-300',
+};
 
-function Block({ title, icon, children, className = '' }) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }) {
+  const s = STATUS_CFG[status] || { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-500 dark:text-gray-400' };
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`}>
-      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100">
-        <span className="text-base leading-none">{icon}</span>
-        <span className="font-semibold text-sm text-gray-700">{title}</span>
-      </div>
-      <div className="p-5">{children}</div>
+    <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${s.bg} ${s.text}`}>
+      {status}
+    </span>
+  );
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${d}/${m}/${String(y).slice(2)}`;
+}
+
+// ── Linha de issue ────────────────────────────────────────────────────────────
+
+function IssueRow({ item }) {
+  const dot = PRIORITY_DOT[item.priority] || PRIORITY_DOT.Medium;
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 border-b border-gray-100 dark:border-gray-700/50 last:border-0 transition-colors group">
+      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} title={item.priority} />
+
+      <a
+        href={`${JIRA}/browse/${item.key}`}
+        target="_blank"
+        rel="noreferrer"
+        className="font-mono text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline flex-shrink-0 w-24"
+      >
+        {item.key}
+      </a>
+
+      <span className="flex-1 text-sm text-gray-800 dark:text-gray-100 truncate" title={item.summary}>
+        {item.summary}
+      </span>
+
+      <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 hidden sm:block tabular-nums">
+        {fmtDate(item.updated)}
+      </span>
+
+      <StatusBadge status={item.status} />
     </div>
   );
 }
 
-function MetricCard({ label, value, delta, positiveDir = 'up' }) {
-  const sign  = delta > 0 ? '+' : '';
-  const color = delta === 0 || delta == null
-    ? 'text-gray-400'
-    : positiveDir === 'neutral'
-      ? 'text-primary-500'
-      : positiveDir === 'up'
-        ? (delta > 0 ? 'text-green-500' : 'text-red-500')
-        : (delta < 0 ? 'text-green-500' : 'text-red-500');
+// ── Card de engenheiro ────────────────────────────────────────────────────────
+
+function EngineerCard({ name, issues, projKey }) {
+  const [open, setOpen] = useState(true);
+  const accent = PROJ_ACCENT[projKey] || PROJ_ACCENT.CRPR;
+
+  const statusCount = issues.reduce((acc, i) => {
+    acc[i.status] = (acc[i.status] || 0) + 1;
+    return acc;
+  }, {});
+
+  const done = issues.filter((i) =>
+    ['Concluído', 'Done', 'Aceito'].includes(i.status)
+  ).length;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-1">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="text-3xl font-extrabold text-gray-900">{value}</p>
-      {delta != null && (
-        <p className={`text-xs font-semibold ${color}`}>
-          {sign}{delta} vs sprint anterior
-        </p>
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-800 text-left transition-colors"
+      >
+        <span className="text-base">👤</span>
+        <span className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex-1">{name}</span>
+
+        {/* Mini status pills */}
+        <div className="hidden sm:flex items-center gap-1.5 mr-2">
+          {Object.entries(statusCount).slice(0, 4).map(([s, n]) => (
+            <span key={s} className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${(STATUS_CFG[s] || {bg:'bg-gray-100 dark:bg-gray-700',text:'text-gray-500'}).bg} ${(STATUS_CFG[s] || {bg:'',text:'text-gray-500'}).text}`}>
+              {n} {s}
+            </span>
+          ))}
+        </div>
+
+        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${accent.badge} flex-shrink-0`}>
+          {issues.length} {issues.length === 1 ? 'issue' : 'issues'}
+        </span>
+
+        {done > 0 && (
+          <span className="text-xs text-green-600 dark:text-green-400 flex-shrink-0 hidden md:block">
+            ✓ {done} concluído{done > 1 ? 's' : ''}
+          </span>
+        )}
+
+        <span className="text-gray-400 text-xs w-4 flex-shrink-0">{open ? '▼' : '▶'}</span>
+      </button>
+
+      {open && (
+        <div>
+          {issues.length === 0 ? (
+            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">Sem issues abertas.</p>
+          ) : (
+            issues.map((it) => <IssueRow key={it.key} item={it} />)
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function LineTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
+// ── Seção de projeto ──────────────────────────────────────────────────────────
+
+function ProjectSection({ projKey, data }) {
+  const [open, setOpen] = useState(true);
+  const accent = PROJ_ACCENT[projKey] || PROJ_ACCENT.CRPR;
+
+  const engineers = Object.entries(data.byAssignee);
+  const hasOthers = data.outros && data.outros.length > 0;
+
   return (
-    <div className="bg-white border border-gray-200 shadow-lg rounded-lg px-3 py-2 text-xs">
-      <p className="font-semibold text-gray-600 mb-0.5">{label}</p>
-      <p className="text-primary-600 font-bold text-sm">{payload[0].value}%</p>
+    <div className="space-y-2">
+      {/* Project header */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-3 py-2 text-left group"
+      >
+        <span className={`w-1 h-6 rounded-full flex-shrink-0 ${accent.dot}`} />
+        <span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">
+          {data.name}
+        </span>
+        <span className="font-mono text-xs text-gray-400 dark:text-gray-500">({projKey})</span>
+        <span className={`ml-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${accent.badge}`}>
+          {data.total} issues
+        </span>
+        <span className="text-gray-400 text-xs ml-auto">{open ? '▼' : '▶'}</span>
+      </button>
+
+      {open && (
+        <div className="pl-4 space-y-2">
+          {engineers.map(([eng, issues]) => (
+            <EngineerCard key={eng} name={eng} issues={issues} projKey={projKey} />
+          ))}
+          {hasOthers && (
+            <EngineerCard name="Outros / Sem atribuição" issues={data.outros} projKey={projKey} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function BarTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-white border border-gray-200 shadow-lg rounded-lg px-3 py-2 text-xs space-y-0.5">
-      <p className="font-semibold text-gray-700 mb-1">{label}</p>
-      {payload.map((p) => (
-        <p key={p.dataKey} style={{ color: BAR_COLORS[p.dataKey] }}>
-          {p.dataKey}: <span className="font-semibold">{p.value}</span>
-        </p>
-      ))}
-    </div>
-  );
-}
+// ── Componente principal ──────────────────────────────────────────────────────
 
-function PieTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null;
-  const { name, value } = payload[0];
-  return (
-    <div className="bg-white border border-gray-200 shadow-lg rounded-lg px-3 py-2 text-xs">
-      <p className="font-semibold text-gray-700">{name}</p>
-      <p className="text-gray-500">{value} cards</p>
-    </div>
-  );
-}
+const PROJ_ORDER = ['CRPR', 'CRMI', 'CRVE'];
 
-function CustomDot({ cx, cy, index, dataLength }) {
-  if (index !== dataLength - 1) return null;
-  return <circle cx={cx} cy={cy} r={6} fill="#8629ff" stroke="#fff" strokeWidth={2} />;
-}
-
-// ── Main ─────────────────────────────────────────────────────────────────────
 export default function Indicadores() {
-  const [projeto, setProjeto] = useState('G&C');
-  const [sprint,  setSprint]  = useState('26.2.2');
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState(null);
+  const [filter,  setFilter]  = useState('TODOS');
+  const [search,  setSearch]  = useState('');
 
-  const d = MOCK.deltas;
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    getIndicadores()
+      .then(setData)
+      .catch((e) => setError(e.response?.data?.error || e.message))
+      .finally(() => setLoading(false));
+  };
 
-  // Stacked bar data for DPO
-  const dpoBarData = MOCK.por_dpo.map((row, i) => {
-    const bloqueados   = i === 0 ? MOCK.bloqueados : 0;
-    const transbordaram = row.total - row.entregues - bloqueados;
-    return { nome: row.nome, Entregues: row.entregues, Transbordaram: transbordaram, Bloqueados: bloqueados };
+  useEffect(() => { load(); }, []);
+
+  // Stats globais
+  const totalGlobal = data
+    ? PROJ_ORDER.reduce((s, k) => s + (data[k]?.total || 0), 0)
+    : 0;
+
+  // Aplica filtro de projeto e busca por texto
+  const projsToShow = PROJ_ORDER.filter((k) => {
+    if (filter !== 'TODOS' && filter !== k) return false;
+    if (!data?.[k]) return false;
+    return true;
   });
 
-  const totalCards = MOCK.por_projeto.reduce((s, p) => s + p.total, 0);
+  // Filtra issues dentro dos projetos por texto
+  function filterData(projData) {
+    if (!search) return projData;
+    const q = search.toLowerCase();
+    const filterIssues = (issues) =>
+      issues.filter((i) =>
+        i.key.toLowerCase().includes(q) ||
+        i.summary.toLowerCase().includes(q)
+      );
+    const byAssignee = {};
+    for (const [eng, issues] of Object.entries(projData.byAssignee)) {
+      byAssignee[eng] = filterIssues(issues);
+    }
+    return {
+      ...projData,
+      byAssignee,
+      outros: filterIssues(projData.outros || []),
+      total: Object.values(byAssignee).reduce((s, a) => s + a.length, 0) + filterIssues(projData.outros || []).length,
+    };
+  }
 
   return (
     <div className="space-y-5">
 
-      {/* ── Filter bar ── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold text-gray-900 mr-2">Indicadores</h1>
-        <select
-          value={projeto}
-          onChange={(e) => setProjeto(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-        >
-          <option>G&C</option>
-          <option>XPTO</option>
-          <option>Todos</option>
-        </select>
-        <select
-          value={sprint}
-          onChange={(e) => setSprint(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-        >
-          {MOCK.evolucao.map((e) => (
-            <option key={e.sprint}>{e.sprint}</option>
-          ))}
-        </select>
-        <span className="ml-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg font-medium">
-          Dados mock — integração em breve
-        </span>
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Indicadores</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Demandas ativas por engenheiro · Pricing · Mídia · Conversão
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Filtro de projeto */}
+          <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-900 shadow-sm">
+            {['TODOS', 'CRPR', 'CRMI', 'CRVE'].map((k) => {
+              const labels = { TODOS: 'Todos', CRPR: 'Pricing', CRMI: 'Mídia', CRVE: 'Conversão' };
+              const active = filter === k;
+              const accent = k !== 'TODOS' ? PROJ_ACCENT[k] : null;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setFilter(k)}
+                  className={`px-3 py-1.5 text-xs font-semibold transition-colors border-r border-gray-200 dark:border-gray-700 last:border-0 ${
+                    active
+                      ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  {labels[k]}
+                  {!active && data?.[k] && (
+                    <span className="ml-1 text-gray-400 dark:text-gray-500">({data[k].total})</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Busca */}
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar issue ou título…"
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 w-48"
+          />
+
+          <button
+            onClick={load}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-white dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+          >
+            {loading
+              ? <><span className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />Carregando…</>
+              : '↻ Atualizar'}
+          </button>
+        </div>
       </div>
 
-      {/* ── BLOCO 1: Metric cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <MetricCard label="Total Sprint"  value={MOCK.total}        delta={d.total}        positiveDir="neutral" />
-        <MetricCard label="Entregues"     value={MOCK.entregues}    delta={d.entregues}    positiveDir="up"      />
-        <MetricCard label="Transbordaram" value={MOCK.transbordaram} delta={d.transbordaram} positiveDir="down"   />
-        <MetricCard label="Bloqueados"    value={MOCK.bloqueados}   delta={d.bloqueados}   positiveDir="down"    />
-        <MetricCard label="Taxa Entrega"  value={`${MOCK.taxa_entrega}%`} delta={`${d.taxa > 0 ? '+' : ''}${d.taxa}%`} positiveDir="up" />
-      </div>
-
-      {/* ── Row 2: DPO bars + Project donut ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-        {/* BLOCO 2 — DPO */}
-        <Block icon="👤" title="Demandas por DPO" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={dpoBarData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="nome" tick={{ fontSize: 12, fill: '#374151', fontWeight: 600 }} axisLine={false} tickLine={false} width={60} />
-              <Tooltip content={<BarTooltip />} cursor={{ fill: '#f9fafb' }} />
-              <Bar dataKey="Entregues"    stackId="a" fill={BAR_COLORS.Entregues}    radius={[0, 0, 0, 0]} />
-              <Bar dataKey="Transbordaram" stackId="a" fill={BAR_COLORS.Transbordaram} />
-              <Bar dataKey="Bloqueados"   stackId="a" fill={BAR_COLORS.Bloqueados}   radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="flex items-center gap-4 mt-3">
-            {Object.entries(BAR_COLORS).map(([label, color]) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-xs text-gray-500">{label}</span>
+      {/* ── Stats bar ── */}
+      {data && (
+        <div className="flex flex-wrap gap-3">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-5 py-3 shadow-sm">
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Total Ativas</div>
+            <div className="text-3xl font-black text-gray-900 dark:text-gray-100">{totalGlobal}</div>
+          </div>
+          {PROJ_ORDER.map((k) => {
+            if (!data[k]) return null;
+            const accent = PROJ_ACCENT[k];
+            return (
+              <div
+                key={k}
+                onClick={() => setFilter(filter === k ? 'TODOS' : k)}
+                className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 cursor-pointer hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+              >
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${accent.dot}`} />
+                <div>
+                  <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide leading-none mb-0.5">
+                    {data[k].name}
+                  </div>
+                  <div className="text-2xl font-black text-gray-900 dark:text-gray-100 leading-none">
+                    {data[k].total}
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
-        </Block>
+            );
+          })}
+        </div>
+      )}
 
-        {/* BLOCO 3 — Project donut */}
-        <Block icon="🗂️" title="Demandas por Projeto">
-          <div className="relative">
-            <ResponsiveContainer width="100%" height={160}>
-              <PieChart>
-                <Pie
-                  data={MOCK.por_projeto}
-                  dataKey="total"
-                  nameKey="nome"
-                  cx="40%"
-                  cy="50%"
-                  innerRadius={46}
-                  outerRadius={70}
-                  paddingAngle={3}
-                  startAngle={90}
-                  endAngle={-270}
-                >
-                  {MOCK.por_projeto.map((_, i) => (
-                    <Cell key={i} fill={PROJ_COLORS[i]} />
-                  ))}
-                </Pie>
-                <Tooltip content={<PieTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Center text */}
-            <div className="absolute pointer-events-none" style={{ top: '50%', left: '40%', transform: 'translate(-50%, -50%)' }}>
-              <p className="text-xl font-extrabold text-gray-900 text-center leading-tight">{totalCards}</p>
-              <p className="text-xs text-gray-400 text-center">cards</p>
+      {/* ── Erro ── */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg px-4 py-3 text-sm text-red-700 dark:text-red-300">
+          <strong>Erro ao carregar:</strong> {error}
+        </div>
+      )}
+
+      {/* ── Skeleton ── */}
+      {loading && (
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="space-y-2">
+              <div className="h-8 w-48 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+              <div className="h-32 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
             </div>
-            {/* Legend */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 space-y-2 pr-1">
-              {MOCK.por_projeto.map((p, i) => (
-                <div key={p.nome} className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PROJ_COLORS[i] }} />
-                  <div>
-                    <p className="text-xs font-semibold text-gray-700 leading-none">{p.nome}</p>
-                    <p className="text-xs text-gray-400">{p.total} cards · {Math.round(p.total / totalCards * 100)}%</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Block>
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* ── Row 3: Evolution line + Status pie ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* ── Projetos ── */}
+      {!loading && data && (
+        <div className="space-y-6">
+          {projsToShow.map((k) => (
+            <ProjectSection key={k} projKey={k} data={filterData(data[k])} />
+          ))}
+        </div>
+      )}
 
-        {/* BLOCO 4 — Evolution line */}
-        <Block icon="📈" title="Evolução da Taxa de Entrega" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={MOCK.evolucao} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-              <XAxis dataKey="sprint" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false}
-                tickFormatter={(v) => `${v}%`} />
-              <Tooltip content={<LineTooltip />} />
-              <ReferenceLine y={50} stroke="#e5e7eb" strokeDasharray="4 4" label={{ value: 'Meta 50%', position: 'right', fontSize: 10, fill: '#d1d5db' }} />
-              <Line
-                type="monotone"
-                dataKey="taxa"
-                stroke="#8629ff"
-                strokeWidth={2.5}
-                dot={(props) => <CustomDot {...props} dataLength={MOCK.evolucao.length} />}
-                activeDot={{ r: 5, fill: '#8629ff', stroke: '#fff', strokeWidth: 2 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="flex items-center justify-between mt-2 px-1">
-            <p className="text-xs text-gray-400">Últimas 5 sprints</p>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-0.5 rounded bg-primary-500" />
-              <span className="text-xs text-gray-500">Taxa de entrega</span>
-            </div>
-          </div>
-        </Block>
-
-        {/* BLOCO 5 — Status pie */}
-        <Block icon="🥧" title="Status Geral">
-          <div className="relative">
-            <ResponsiveContainer width="100%" height={160}>
-              <PieChart>
-                <Pie
-                  data={MOCK.por_status}
-                  dataKey="total"
-                  nameKey="status"
-                  cx="40%"
-                  cy="50%"
-                  outerRadius={70}
-                  paddingAngle={2}
-                  startAngle={90}
-                  endAngle={-270}
-                >
-                  {MOCK.por_status.map((entry) => (
-                    <Cell key={entry.status} fill={STATUS_COLOR[entry.status] ?? '#9ca3af'} />
-                  ))}
-                </Pie>
-                <Tooltip content={<PieTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Legend */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 space-y-1.5 pr-1">
-              {MOCK.por_status.map((s) => (
-                <div key={s.status} className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_COLOR[s.status] ?? '#9ca3af' }} />
-                  <div>
-                    <p className="text-xs font-medium text-gray-700 leading-none">{s.status}</p>
-                    <p className="text-xs text-gray-400">{s.total} cards</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Block>
-      </div>
-
+      {!loading && data && projsToShow.length === 0 && (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-10 text-center text-gray-400 text-sm">
+          Nenhum dado encontrado.
+        </div>
+      )}
     </div>
   );
 }

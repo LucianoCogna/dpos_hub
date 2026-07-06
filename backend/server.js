@@ -9,6 +9,8 @@ const documentacaoRoutes = require('./routes/documentacao');
 const statusReportRoutes = require('./routes/statusReport');
 const entregasRoutes     = require('./routes/entregas');
 const plataformaRoutes   = require('./routes/plataforma');
+const prioridadesRoutes  = require('./routes/prioridades');
+const indicadoresRoutes  = require('./routes/indicadores');
 
 const app = express();
 
@@ -28,6 +30,8 @@ app.use('/api', documentacaoRoutes);
 app.use('/api', statusReportRoutes);
 app.use('/api', entregasRoutes);
 app.use('/api', plataformaRoutes);
+app.use('/api', prioridadesRoutes);
+app.use('/api', indicadoresRoutes);
 
 if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 3001;

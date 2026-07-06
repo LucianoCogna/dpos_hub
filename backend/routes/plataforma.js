@@ -28,6 +28,7 @@ const FIELDS = [
   'summary', 'status', 'issuetype', 'assignee',
   'priority', 'parent', 'labels', 'components',
   'customfield_10020', // sprint
+  'created',
 ];
 
 function mapIssue(issue) {
@@ -41,6 +42,7 @@ function mapIssue(issue) {
     priority: f.priority?.name || 'Medium',
     parent:   f.parent ? { key: f.parent.key, summary: f.parent.fields?.summary || '' } : null,
     labels:   f.labels || [],
+    created:  f.created ? f.created.slice(0, 10) : null,
   };
 }
 
