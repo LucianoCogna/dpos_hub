@@ -17,7 +17,7 @@ const NAV = [
   { to: '/indicadores',  label: 'Rewired'      },
   { to: '/entregas',         label: 'Entregas'         },
   { to: '/plataforma',       label: 'Plataforma'       },
-  { to: '/status-report-v2', label: 'Status Report V2' },
+  { to: '/status-report-v2', label: 'Status Report' },
 ];
 
 export default function App() {
