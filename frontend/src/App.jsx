@@ -14,7 +14,7 @@ const NAV = [
   { to: '/planning',     label: 'Planning'     },
   { to: '/kanban',       label: 'Kanban'       },
   { to: '/review',       label: 'Review'       },
-  { to: '/indicadores',  label: 'Indicadores'  },
+  { to: '/indicadores',  label: 'Rewired'      },
   { to: '/entregas',         label: 'Entregas'         },
   { to: '/plataforma',       label: 'Plataforma'       },
   { to: '/status-report-v2', label: 'Status Report V2' },
