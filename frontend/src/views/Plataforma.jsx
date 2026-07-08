@@ -626,7 +626,7 @@ export default function Plataforma() {
 
       {/* Conteúdo das abas */}
       {!loading && tab === 'backlog' && (
-        <BacklogView items={itemsFiltrados} />
+        <BacklogView items={itemsFiltrados.filter(i => i.status === 'Backlog')} />
       )}
 
       {!loading && tab === 'em-andamento' && (
