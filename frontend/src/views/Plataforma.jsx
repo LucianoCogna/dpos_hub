@@ -77,6 +77,7 @@ function TableHeader() {
         <th className="px-3 py-2.5 text-left w-44">Etiquetas</th>
         <th className="px-3 py-2.5 text-center w-28">Criado há</th>
         <th className="px-3 py-2.5 text-center w-28">1ª Resposta</th>
+        <th className="px-3 py-2.5 text-left w-36">Criador</th>
         <th className="px-3 py-2.5 text-left w-36">Responsável</th>
       </tr>
     </thead>
@@ -174,6 +175,17 @@ function IssueRow({ item }) {
         )}
       </td>
 
+      {/* Criador */}
+      <td className="px-3 py-2.5">
+        {item.reporter ? (
+          <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full px-2 py-0.5 truncate max-w-[130px] block" title={item.reporter}>
+            {item.reporter}
+          </span>
+        ) : (
+          <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
+        )}
+      </td>
+
       {/* Responsável */}
       <td className="px-3 py-2.5">
         {item.assignee ? (
@@ -201,7 +213,7 @@ function EpicGroup({ grupo, byKey }) {
         className="bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
         onClick={() => setOpen((o) => !o)}
       >
-        <td colSpan={9} className="px-3 py-2.5">
+        <td colSpan={10} className="px-3 py-2.5">
           <div className="flex items-center gap-3">
             <span className="text-gray-400 text-xs w-3">{open ? '▼' : '▶'}</span>
 
