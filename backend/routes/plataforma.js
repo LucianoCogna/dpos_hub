@@ -69,13 +69,12 @@ function mapIssue(issue) {
 // GET /api/plataforma — DDPLs em Backlog sem sprint, agrupados por épico
 router.get('/plataforma', async (req, res) => {
   try {
-    const jql = 'project = DDPL AND sprint is EMPTY AND status = Backlog AND issuetype in ("História", "História (M)", Story) ORDER BY key ASC';
+    const jql = 'project = DDPL AND issuetype in ("História", "História (M)", Story) AND status != "Cancelado" ORDER BY key ASC';
     const raw = await fetchAll(jql, FIELDS);
 
     const items = raw
       .map(mapIssue)
-      .filter((it) => isAllowedReporter(it.reporter))
-      .filter((it) => !it.parent);
+      .filter((it) => isAllowedReporter(it.reporter));
 
     const porTipo = items.reduce((acc, it) => {
       acc[it.type] = (acc[it.type] || 0) + 1;
