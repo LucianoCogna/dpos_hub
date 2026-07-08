@@ -194,58 +194,10 @@ function IssueRow({ item }) {
   );
 }
 
-// ── Grupo por épico (agora como tbody dentro de uma tabela compartilhada) ─────
+// ── Vista Backlog (tabela plana) ──────────────────────────────────────────────
 
-function EpicGroup({ grupo, byKey }) {
-  const [open, setOpen] = useState(true);
-  const isSemEpico = grupo.key === 'SEM_EPICO';
-
-  return (
-    <tbody>
-      {/* Linha de cabeçalho do épico */}
-      <tr
-        className="bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <td colSpan={9} className="px-3 py-2.5">
-          <div className="flex items-center gap-3">
-            <span className="text-gray-400 text-xs w-3">{open ? '▼' : '▶'}</span>
-
-            {!isSemEpico && (
-              <a
-                href={`${JIRA}/browse/${grupo.key}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="font-mono text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline flex-shrink-0"
-              >
-                {grupo.key}
-              </a>
-            )}
-
-            <span className={`text-sm font-semibold truncate ${isSemEpico ? 'text-gray-400 italic' : 'text-gray-800 dark:text-gray-100'}`}>
-              {grupo.summary}
-            </span>
-
-            <span className="ml-auto text-xs font-medium bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 rounded-full px-2.5 py-0.5 flex-shrink-0">
-              {grupo.items.length} {grupo.items.length === 1 ? 'item' : 'itens'}
-            </span>
-          </div>
-        </td>
-      </tr>
-
-      {/* Linhas de issues */}
-      {open && grupo.items.map((it) => (
-        <IssueRow key={it.key} item={it} />
-      ))}
-    </tbody>
-  );
-}
-
-// ── Vista Backlog (tabela) ────────────────────────────────────────────────────
-
-function BacklogView({ grupos, byKey }) {
-  if (grupos.length === 0) {
+function BacklogView({ items }) {
+  if (items.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-10 text-center text-gray-400 text-sm">
         Nenhum item encontrado com os filtros atuais.
@@ -257,9 +209,9 @@ function BacklogView({ grupos, byKey }) {
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm overflow-x-auto">
       <table className="w-full text-sm min-w-[900px] border-collapse">
         <TableHeader />
-        {grupos.map((g) => (
-          <EpicGroup key={g.key} grupo={g} byKey={byKey} />
-        ))}
+        <tbody>
+          {items.map((it) => <IssueRow key={it.key} item={it} />)}
+        </tbody>
       </table>
     </div>
   );
@@ -531,22 +483,16 @@ export default function Plataforma() {
     localStorage.setItem('plataforma_dpo', name);
   };
 
-  const allItems = (data?.grupos || []).flatMap((g) => g.items);
+  const allItems = data?.items || [];
 
-  const grupos = (data?.grupos || [])
-    .map((g) => ({
-      ...g,
-      items: g.items.filter((it) => {
-        const matchSearch = !search ||
-          it.summary.toLowerCase().includes(search.toLowerCase()) ||
-          it.key.toLowerCase().includes(search.toLowerCase());
-        const matchType = !filterType || it.type === filterType;
-        return matchSearch && matchType;
-      }),
-    }))
-    .filter((g) => g.items.length > 0);
+  const itemsFiltrados = allItems.filter((it) => {
+    const matchSearch = !search ||
+      it.summary.toLowerCase().includes(search.toLowerCase()) ||
+      it.key.toLowerCase().includes(search.toLowerCase());
+    const matchType = !filterType || it.type === filterType;
+    return matchSearch && matchType;
+  });
 
-  const totalFiltrado = grupos.reduce((s, g) => s + g.items.length, 0);
   const tipos = data ? Object.keys(data.por_tipo).sort() : [];
 
   return (
@@ -640,7 +586,7 @@ export default function Plataforma() {
             {tipos.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
           {(search || filterType) && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">{totalFiltrado} resultado{totalFiltrado !== 1 ? 's' : ''}</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{itemsFiltrados.length} resultado{itemsFiltrados.length !== 1 ? 's' : ''}</span>
           )}
         </div>
       )}
@@ -663,7 +609,7 @@ export default function Plataforma() {
 
       {/* Conteúdo das abas */}
       {!loading && tab === 'backlog' && (
-        <BacklogView grupos={grupos} byKey={prios.byKey} />
+        <BacklogView items={itemsFiltrados} />
       )}
 
       {!loading && tab === 'priorizacao' && (

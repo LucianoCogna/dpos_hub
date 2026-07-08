@@ -74,32 +74,12 @@ router.get('/plataforma', async (req, res) => {
 
     const items = raw.map(mapIssue).filter((it) => isAllowedReporter(it.reporter));
 
-    // Agrupa por épico pai
-    const epicMap = {};
-    const semEpico = [];
-
-    for (const it of items) {
-      if (it.parent && it.parent.key.startsWith('DDPL-')) {
-        const { key, summary } = it.parent;
-        if (!epicMap[key]) epicMap[key] = { key, summary, items: [] };
-        epicMap[key].items.push(it);
-      } else {
-        semEpico.push(it);
-      }
-    }
-
-    const grupos = [
-      ...Object.values(epicMap).sort((a, b) => a.key.localeCompare(b.key)),
-      ...(semEpico.length ? [{ key: 'SEM_EPICO', summary: 'Sem Épico', items: semEpico }] : []),
-    ];
-
-    // Contagem por tipo
     const porTipo = items.reduce((acc, it) => {
       acc[it.type] = (acc[it.type] || 0) + 1;
       return acc;
     }, {});
 
-    res.json({ total: items.length, por_tipo: porTipo, grupos });
+    res.json({ total: items.length, por_tipo: porTipo, items });
   } catch (e) {
     console.error('Plataforma error:', e.message);
     res.status(500).json({ error: e.message });
