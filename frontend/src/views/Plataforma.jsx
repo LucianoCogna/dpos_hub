@@ -71,7 +71,6 @@ function TableHeader() {
       <tr className="bg-gray-50 dark:bg-gray-800 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
         <th className="px-3 py-2.5 text-left w-6"></th>
         <th className="px-3 py-2.5 text-left w-28">Chave</th>
-        <th className="px-3 py-2.5 text-left w-32">Tipo</th>
         <th className="px-3 py-2.5 text-left">Resumo</th>
         <th className="px-3 py-2.5 text-left w-36">Status do DDPL</th>
         <th className="px-3 py-2.5 text-left w-44">Etiquetas</th>
@@ -107,11 +106,6 @@ function IssueRow({ item }) {
         >
           {item.key}
         </a>
-      </td>
-
-      {/* Tipo */}
-      <td className="px-3 py-2.5">
-        <TypeBadge type={item.type} />
       </td>
 
       {/* Resumo */}
@@ -213,7 +207,7 @@ function EpicGroup({ grupo, byKey }) {
         className="bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
         onClick={() => setOpen((o) => !o)}
       >
-        <td colSpan={10} className="px-3 py-2.5">
+        <td colSpan={9} className="px-3 py-2.5">
           <div className="flex items-center gap-3">
             <span className="text-gray-400 text-xs w-3">{open ? '▼' : '▶'}</span>
 

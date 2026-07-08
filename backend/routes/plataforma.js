@@ -33,6 +33,22 @@ const FIELDS = [
   'customfield_10034', // date of first response
 ];
 
+const ALLOWED_REPORTERS = [
+  'luciano de oliveira santos',
+  'daniele brito',
+  'erika',
+  'rosilaine',
+  'karla',
+  'pauletti',
+  'carol',
+];
+
+function isAllowedReporter(displayName) {
+  if (!displayName) return false;
+  const lower = displayName.toLowerCase();
+  return ALLOWED_REPORTERS.some((name) => lower.includes(name));
+}
+
 function mapIssue(issue) {
   const f = issue.fields;
   return {
@@ -56,7 +72,7 @@ router.get('/plataforma', async (req, res) => {
     const jql = 'project = DDPL AND sprint is EMPTY AND status = Backlog ORDER BY key ASC';
     const raw = await fetchAll(jql, FIELDS);
 
-    const items = raw.map(mapIssue);
+    const items = raw.map(mapIssue).filter((it) => isAllowedReporter(it.reporter));
 
     // Agrupa por épico pai
     const epicMap = {};
