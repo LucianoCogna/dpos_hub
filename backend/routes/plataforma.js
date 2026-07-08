@@ -29,6 +29,7 @@ const FIELDS = [
   'priority', 'parent', 'labels', 'components',
   'customfield_10020', // sprint
   'created',
+  'customfield_10034', // date of first response
 ];
 
 function mapIssue(issue) {
@@ -41,8 +42,9 @@ function mapIssue(issue) {
     assignee: f.assignee?.displayName || null,
     priority: f.priority?.name || 'Medium',
     parent:   f.parent ? { key: f.parent.key, summary: f.parent.fields?.summary || '' } : null,
-    labels:   f.labels || [],
-    created:  f.created ? f.created.slice(0, 10) : null,
+    labels:         f.labels || [],
+    created:        f.created        ? f.created.slice(0, 10)        : null,
+    first_response: f.customfield_10034 ? f.customfield_10034.slice(0, 10) : null,
   };
 }
 
