@@ -557,8 +557,9 @@ export default function Plataforma() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
         {[
-          { id: 'backlog',     label: 'Backlog' },
-          { id: 'priorizacao', label: 'Priorização', badge: prios.items.length || null },
+          { id: 'backlog',      label: 'Backlog' },
+          { id: 'em-andamento', label: 'Em Andamento', badge: allItems.filter(i => i.status === 'Em Andamento').length || null },
+          { id: 'priorizacao',  label: 'Priorização',  badge: prios.items.length || null },
         ].map(({ id, label, badge }) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 -mb-px ${
@@ -626,6 +627,10 @@ export default function Plataforma() {
       {/* Conteúdo das abas */}
       {!loading && tab === 'backlog' && (
         <BacklogView items={itemsFiltrados} />
+      )}
+
+      {!loading && tab === 'em-andamento' && (
+        <BacklogView items={allItems.filter(i => i.status === 'Em Andamento')} />
       )}
 
       {!loading && tab === 'priorizacao' && (
