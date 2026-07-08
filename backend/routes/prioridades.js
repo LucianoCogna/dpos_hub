@@ -3,7 +3,11 @@ const fs      = require('fs');
 const path    = require('path');
 const router  = express.Router();
 
-const DATA_FILE = path.join(__dirname, '../data/prioridades.json');
+// Em produção Vercel o filesystem é read-only; só /tmp é gravável (ephemeral).
+// Em desenvolvimento usa o diretório local data/.
+const DATA_FILE = process.env.VERCEL
+  ? '/tmp/prioridades.json'
+  : path.join(__dirname, '../data/prioridades.json');
 
 function load() {
   try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); }
@@ -11,7 +15,12 @@ function load() {
 }
 
 function save(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Erro ao salvar prioridades:', err.message);
+    throw err;
+  }
 }
 
 // GET /api/prioridades
@@ -32,7 +41,8 @@ router.post('/prioridades/:key', (req, res) => {
     return res.status(400).json({ error: 'dpo e prioridade são obrigatórios' });
   }
 
-  const data = load();
+  let data;
+  try { data = load(); } catch { data = {}; }
 
   // Prioridade já em uso por outro item?
   const conflito = Object.entries(data).find(
@@ -61,17 +71,23 @@ router.post('/prioridades/:key', (req, res) => {
     updated_at:  new Date().toISOString(),
   };
 
-  save(data);
-  res.json({ ok: true, item: { key, ...data[key] } });
+  try {
+    save(data);
+    res.json({ ok: true, item: { key, ...data[key] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Não foi possível salvar: ' + err.message });
+  }
 });
 
 // DELETE /api/prioridades/:key — remove prioridade (somente o DPO dono)
 router.delete('/prioridades/:key', (req, res) => {
-  const { key }      = req.params;
-  const { dpo }      = req.body;
-  const data         = load();
-  const existing     = data[key];
+  const { key } = req.params;
+  const { dpo } = req.body;
 
+  let data;
+  try { data = load(); } catch { data = {}; }
+
+  const existing = data[key];
   if (!existing) return res.status(404).json({ error: 'Priorização não encontrada' });
   if (existing.dpo !== dpo) {
     return res.status(403).json({
@@ -80,8 +96,12 @@ router.delete('/prioridades/:key', (req, res) => {
   }
 
   delete data[key];
-  save(data);
-  res.json({ ok: true });
+  try {
+    save(data);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Não foi possível salvar: ' + err.message });
+  }
 });
 
 module.exports = router;
