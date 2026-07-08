@@ -459,8 +459,9 @@ export default function Plataforma() {
   const [prios,      setPrios]      = useState({ items: [], byKey: {} });
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState(null);
-  const [search,     setSearch]     = useState('');
-  const [filterType, setFilterType] = useState('');
+  const [search,       setSearch]       = useState('');
+  const [filterType,   setFilterType]   = useState('');
+  const [filterLabel,  setFilterLabel]  = useState('');
 
   const loadPrios = useCallback(
     () => getPrioridades().then(setPrios).catch(() => {}),
@@ -489,11 +490,13 @@ export default function Plataforma() {
     const matchSearch = !search ||
       it.summary.toLowerCase().includes(search.toLowerCase()) ||
       it.key.toLowerCase().includes(search.toLowerCase());
-    const matchType = !filterType || it.type === filterType;
-    return matchSearch && matchType;
+    const matchType  = !filterType  || it.type === filterType;
+    const matchLabel = !filterLabel || (it.labels || []).includes(filterLabel);
+    return matchSearch && matchType && matchLabel;
   });
 
-  const tipos = data ? Object.keys(data.por_tipo).sort() : [];
+  const tipos  = data ? Object.keys(data.por_tipo).sort() : [];
+  const labels = [...new Set(allItems.flatMap((it) => it.labels || []))].sort();
 
   return (
     <div className="space-y-5">
@@ -585,8 +588,21 @@ export default function Plataforma() {
             <option value="">Todos os tipos</option>
             {tipos.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          {(search || filterType) && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">{itemsFiltrados.length} resultado{itemsFiltrados.length !== 1 ? 's' : ''}</span>
+          <select value={filterLabel} onChange={(e) => setFilterLabel(e.target.value)}
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+            <option value="">Todas as etiquetas</option>
+            {labels.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+          {(search || filterType || filterLabel) && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400">{itemsFiltrados.length} resultado{itemsFiltrados.length !== 1 ? 's' : ''}</span>
+              <button
+                onClick={() => { setSearch(''); setFilterType(''); setFilterLabel(''); }}
+                className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 underline"
+              >
+                limpar
+              </button>
+            </div>
           )}
         </div>
       )}
