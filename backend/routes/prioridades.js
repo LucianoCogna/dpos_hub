@@ -1,10 +1,9 @@
 const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
+const axios   = require('axios');
 const router  = express.Router();
 
-// Em produção Vercel o filesystem é read-only; só /tmp é gravável (ephemeral).
-// Em desenvolvimento usa o diretório local data/.
 const DATA_FILE = process.env.VERCEL
   ? '/tmp/prioridades.json'
   : path.join(__dirname, '../data/prioridades.json');
@@ -23,13 +22,55 @@ function save(data) {
   }
 }
 
+function getHeaders() {
+  const token = Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_TOKEN}`).toString('base64');
+  return { Authorization: `Basic ${token}`, 'Content-Type': 'application/json' };
+}
+
+// Remove da priorização itens que já entraram em andamento no Jira
+async function cleanupEmAndamento(data) {
+  const keys = Object.keys(data);
+  if (keys.length === 0) return data;
+
+  try {
+    const url = `${process.env.JIRA_BASE_URL}/rest/api/3/search/jql`;
+    const { data: jira } = await axios.post(
+      url,
+      { jql: `issueKey in (${keys.join(',')})`, fields: ['status'], maxResults: 200 },
+      { headers: getHeaders(), timeout: 10000 }
+    );
+
+    let changed = false;
+    for (const issue of jira.issues || []) {
+      const status = issue.fields.status?.name || '';
+      if (status === 'Em Andamento') {
+        delete data[issue.key];
+        changed = true;
+      }
+    }
+
+    if (changed) save(data);
+  } catch (e) {
+    console.error('Cleanup Em Andamento falhou:', e.message);
+  }
+
+  return data;
+}
+
 // GET /api/prioridades
-router.get('/prioridades', (req, res) => {
-  const data  = load();
-  const items = Object.entries(data)
-    .map(([key, v]) => ({ key, ...v }))
-    .sort((a, b) => parseFloat(a.prioridade) - parseFloat(b.prioridade));
-  res.json({ items, byKey: data });
+router.get('/prioridades', async (req, res) => {
+  try {
+    let data = load();
+    data = await cleanupEmAndamento(data);
+
+    const items = Object.entries(data)
+      .map(([key, v]) => ({ key, ...v }))
+      .sort((a, b) => parseFloat(a.prioridade) - parseFloat(b.prioridade));
+
+    res.json({ items, byKey: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // POST /api/prioridades/:key — define ou atualiza prioridade
@@ -44,7 +85,6 @@ router.post('/prioridades/:key', (req, res) => {
   let data;
   try { data = load(); } catch { data = {}; }
 
-  // Prioridade já em uso por outro item?
   const conflito = Object.entries(data).find(
     ([k, v]) => k !== key && String(v.prioridade) === String(prioridade).trim()
   );
@@ -54,7 +94,6 @@ router.post('/prioridades/:key', (req, res) => {
     });
   }
 
-  // Item já travado por outro DPO?
   const existing = data[key];
   if (existing && existing.dpo !== dpo) {
     return res.status(403).json({
@@ -79,7 +118,7 @@ router.post('/prioridades/:key', (req, res) => {
   }
 });
 
-// DELETE /api/prioridades/:key — remove prioridade (somente o DPO dono)
+// DELETE /api/prioridades/:key
 router.delete('/prioridades/:key', (req, res) => {
   const { key } = req.params;
   const { dpo } = req.body;
