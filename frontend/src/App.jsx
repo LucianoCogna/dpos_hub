@@ -8,7 +8,6 @@ import Kanban from './views/Kanban';
 import StatusReportV2 from './views/StatusReportV2';
 import Entregas from './views/Entregas';
 import Plataforma from './views/Plataforma';
-import ChatButton from './components/ChatButton';
 
 const NAV = [
   { to: '/planning',     label: 'Planning'     },
@@ -82,7 +81,6 @@ export default function App() {
           </Routes>
         </main>
       </div>
-      <ChatButton />
     </BrowserRouter>
   );
 }
