@@ -43,7 +43,7 @@ const ALLOWED_REPORTERS = [
   'rosilaine papa',
   'karla ynonye',
   'pauletti',
-  'carolina teixeira',
+  'carolina teixeira dias',
   'gilson dos santos',
 ];
 
