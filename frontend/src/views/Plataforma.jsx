@@ -285,7 +285,8 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
   const [dragOver,  setDragOver]  = useState(null);
 
   const prioritizedKeys = new Set(prios.items.map((i) => i.key));
-  const unprioritized   = backlogItems.filter((i) => !prioritizedKeys.has(i.key));
+  // Só permite priorizar itens que NÃO estão em andamento (cleanup os removeria imediatamente)
+  const unprioritized   = backlogItems.filter((i) => !prioritizedKeys.has(i.key) && i.status !== 'Em Andamento');
 
   // ── Drag-and-drop ──────────────────────────────────────────────────────────
   const handleDragStart = (e, key) => {
@@ -567,10 +568,16 @@ export default function Plataforma() {
   const [filterType,   setFilterType]   = useState('');
   const [filterLabel,  setFilterLabel]  = useState('');
 
-  const loadPrios = useCallback(
-    () => getPrioridades().then(setPrios).catch(() => {}),
-    []
-  );
+  const loadPrios = useCallback(async () => {
+    try {
+      const data = await getPrioridades();
+      console.log('[loadPrios] retornou', data.items?.length, 'itens');
+      setPrios(data);
+      return data;
+    } catch (e) {
+      console.error('[loadPrios] ERRO ao buscar prioridades:', e.response?.data || e.message);
+    }
+  }, []);
 
   const load = () => {
     setLoading(true);
