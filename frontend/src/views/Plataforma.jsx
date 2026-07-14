@@ -613,6 +613,7 @@ export default function Plataforma() {
         {[
           { id: 'backlog',      label: 'Backlog' },
           { id: 'em-andamento', label: 'Em Andamento', badge: allItems.filter(i => i.status === 'Em Andamento').length || null },
+          { id: 'bloqueadas',   label: 'Bloqueadas',   badge: allItems.filter(i => ['Bloqueado', 'Blocked', 'Impedido'].includes(i.status)).length || null },
           { id: 'priorizacao',  label: 'Priorização',  badge: prios.items.length || null },
         ].map(({ id, label, badge }) => (
           <button key={id} onClick={() => setTab(id)}
@@ -685,6 +686,10 @@ export default function Plataforma() {
 
       {!loading && tab === 'em-andamento' && (
         <BacklogView items={allItems.filter(i => i.status === 'Em Andamento')} />
+      )}
+
+      {!loading && tab === 'bloqueadas' && (
+        <BacklogView items={allItems.filter(i => ['Bloqueado', 'Blocked', 'Impedido'].includes(i.status))} />
       )}
 
       {!loading && tab === 'priorizacao' && (

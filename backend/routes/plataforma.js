@@ -69,7 +69,7 @@ function mapIssue(issue) {
 // GET /api/plataforma — DDPLs em Backlog sem sprint, agrupados por épico
 router.get('/plataforma', async (req, res) => {
   try {
-    const jql = 'project = DDPL AND issuetype in ("História", "História (M)", Story) AND status in ("Backlog", "Em Andamento", "Refinamento") ORDER BY key ASC';
+    const jql = 'project = DDPL AND issuetype in ("História", "História (M)", Story) AND status in ("Backlog", "Em Andamento", "Refinamento", "Bloqueado", "Blocked", "Impedido") ORDER BY key ASC';
     const raw = await fetchAll(jql, FIELDS);
 
     const items = raw
