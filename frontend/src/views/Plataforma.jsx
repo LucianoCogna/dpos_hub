@@ -276,7 +276,7 @@ function SearchableSelect({ options, value, onChange, placeholder = 'Selecione o
 
 function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
   const [addMode,   setAddMode]   = useState(false);
-  const [addForm,   setAddForm]   = useState({ key: '', responsavel: '' });
+  const [addForm,   setAddForm]   = useState({ key: '' });
   const [editKey,   setEditKey]   = useState(null);
   const [editForm,  setEditForm]  = useState({});
   const [saving,    setSaving]    = useState(false);
@@ -329,12 +329,11 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
       const bi       = backlogItems.find((i) => i.key === addForm.key);
       const nextPrio = String(prios.items.length + 1);
       await setPrioridade(addForm.key, {
-        prioridade:  nextPrio,
-        responsavel: addForm.responsavel.trim(),
-        atividade:   bi?.summary || addForm.key,
+        prioridade: nextPrio,
+        atividade:  bi?.summary || addForm.key,
       });
       setAddMode(false);
-      setAddForm({ key: '', responsavel: '' });
+      setAddForm({ key: '' });
       await onRefreshPrios();
     } catch (e) {
       setFormError(e.response?.data?.error || e.message);
@@ -349,9 +348,8 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
     try {
       const bi = backlogItems.find((i) => i.key === key);
       await setPrioridade(key, {
-        prioridade:  prios.items.find((i) => i.key === key)?.prioridade || '0',
-        responsavel: editForm.responsavel,
-        atividade:   bi?.summary || key,
+        prioridade: prios.items.find((i) => i.key === key)?.prioridade || '0',
+        atividade:  bi?.summary || key,
       });
       setEditKey(null);
       await onRefreshPrios();
@@ -419,12 +417,6 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
                 }))}
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500">Responsável</label>
-              <input type="text" placeholder="Nome" value={addForm.responsavel}
-                onChange={(e) => setAddForm((f) => ({ ...f, responsavel: e.target.value }))}
-                className={`${inputCls} w-44`} />
-            </div>
             <button onClick={handleAdd} disabled={saving || !addForm.key}
               className="px-4 py-1.5 text-sm font-medium bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition-colors">
               {saving ? 'Salvando…' : 'Salvar'}
@@ -444,7 +436,6 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
               <th className="text-left   px-3 py-3">Atividade</th>
               <th className="text-left   px-3 py-3 w-28">Status</th>
               <th className="text-left   px-3 py-3">Etiquetas</th>
-              <th className="text-center px-3 py-3 w-16">SP</th>
               <th className="text-left   px-3 py-3 w-36">Responsável</th>
               <th className="text-center px-3 py-3 w-24">Ações</th>
             </tr>
@@ -512,26 +503,9 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
                     </div>
                   </td>
 
-                  {/* Story Points (somente leitura — vem do Jira) */}
-                  <td className="px-3 py-3 text-center">
-                    {bi?.story_points != null ? (
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-xs font-bold">
-                        {bi.story_points}
-                      </span>
-                    ) : (
-                      <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
-                    )}
-                  </td>
-
-                  {/* Responsável */}
+                  {/* Responsável (vem do Jira — assignee) */}
                   <td className="px-3 py-3">
-                    {isEditing ? (
-                      <input type="text" value={editForm.responsavel}
-                        onChange={(e) => setEditForm((f) => ({ ...f, responsavel: e.target.value }))}
-                        className="border border-blue-300 dark:border-blue-600 rounded px-2 py-1 text-sm w-full bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200" />
-                    ) : (
-                      <span className="text-gray-700 dark:text-gray-300 text-sm">{item.responsavel || '—'}</span>
-                    )}
+                    <span className="text-gray-700 dark:text-gray-300 text-sm">{bi?.assignee || '—'}</span>
                   </td>
 
                   {/* Ações */}
@@ -546,7 +520,7 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
                     ) : (
                       <div className="flex gap-1 justify-center">
                         <button
-                          onClick={() => { setEditKey(item.key); setEditForm({ responsavel: item.responsavel || '' }); setFormError(null); }}
+                          onClick={() => { setEditKey(item.key); setEditForm({}); setFormError(null); }}
                           className="text-xs px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 rounded-lg">
                           Editar
                         </button>
@@ -563,7 +537,7 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
 
             {prios.items.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center py-12 text-gray-400 dark:text-gray-600 text-sm">
+                <td colSpan={7} className="text-center py-12 text-gray-400 dark:text-gray-600 text-sm">
                   Nenhum item priorizado. Clique em "+ Adicionar" para começar.
                 </td>
               </tr>
