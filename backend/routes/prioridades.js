@@ -3,26 +3,15 @@ const axios   = require('axios');
 const router  = express.Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PRIORIDADES HARDCODADAS
-// Edite aqui para salvar permanentemente. Formato:
-// "DDPL-XXXX": { prioridade: "1", dpo: "Nome", responsavel: "Nome", atividade: "Título" }
+// PRIORIDADES HARDCODADAS — edite aqui para salvar permanentemente.
+// "DDPL-XXXX": { prioridade:"1", responsavel:"Nome", story_points:"5", atividade:"Título" }
 // ─────────────────────────────────────────────────────────────────────────────
-const HARDCODED = {
-  // Exemplos (descomente e preencha):
-  // "DDPL-7634": { prioridade: "1", dpo: "Luciano", responsavel: "", atividade: "" },
-};
+const HARDCODED = {};
 
-// Store em memória — inicializado a partir do hardcode e atualizado via UI.
-// Persiste enquanto o servidor estiver ativo; ao reiniciar, volta ao HARDCODED.
 let store = JSON.parse(JSON.stringify(HARDCODED));
 
-function load() {
-  return store;
-}
-
-function save(data) {
-  store = data;
-}
+function load()       { return store; }
+function save(data)   { store = data; }
 
 function getHeaders() {
   const token = Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_TOKEN}`).toString('base64');
@@ -31,7 +20,7 @@ function getHeaders() {
 
 async function cleanupEmAndamento(data) {
   const keys = Object.keys(data);
-  if (keys.length === 0) return data;
+  if (!keys.length) return data;
   try {
     const url = `${process.env.JIRA_BASE_URL}/rest/api/3/search/jql`;
     const { data: jira } = await axios.post(
@@ -67,54 +56,57 @@ router.get('/prioridades', async (req, res) => {
   }
 });
 
-// POST /api/prioridades/:key
+// POST /api/prioridades/:key — sem lock por DPO
 router.post('/prioridades/:key', (req, res) => {
   const { key } = req.params;
-  const { dpo, prioridade, responsavel, atividade } = req.body;
+  const { prioridade, responsavel, atividade, story_points, dpo } = req.body;
 
-  if (!dpo || prioridade === undefined || String(prioridade).trim() === '') {
-    return res.status(400).json({ error: 'dpo e prioridade são obrigatórios' });
+  if (prioridade === undefined || String(prioridade).trim() === '') {
+    return res.status(400).json({ error: 'prioridade é obrigatória' });
   }
 
-  const data = { ...load() };
-
-  const conflito = Object.entries(data).find(
-    ([k, v]) => k !== key && String(v.prioridade) === String(prioridade).trim()
-  );
-  if (conflito) {
-    return res.status(409).json({ error: `Prioridade ${prioridade} já está sendo usada por ${conflito[0]}` });
-  }
-
+  const data     = { ...load() };
   const existing = data[key];
-  if (existing && existing.dpo !== dpo) {
-    return res.status(403).json({ error: `Esta priorização foi definida por ${existing.dpo} e não pode ser alterada.` });
-  }
 
   data[key] = {
-    prioridade:  String(prioridade).trim(),
-    dpo,
-    responsavel: responsavel || '',
-    atividade:   atividade || key,
-    locked_at:   existing?.locked_at || new Date().toISOString(),
-    updated_at:  new Date().toISOString(),
+    prioridade:   String(prioridade).trim(),
+    responsavel:  responsavel  || '',
+    story_points: story_points || '',
+    atividade:    atividade    || key,
+    dpo:          dpo          || existing?.dpo || '',
+    locked_at:    existing?.locked_at || new Date().toISOString(),
+    updated_at:   new Date().toISOString(),
   };
 
   save(data);
   res.json({ ok: true, item: { key, ...data[key] } });
 });
 
-// DELETE /api/prioridades/:key
+// PUT /api/prioridades/reorder — reordena em lote após drag-and-drop
+router.put('/prioridades/reorder', (req, res) => {
+  const { order } = req.body; // [{ key, ...campos }]
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order deve ser array' });
+
+  const data = { ...load() };
+  order.forEach((item, idx) => {
+    if (data[item.key]) {
+      data[item.key].prioridade  = String(idx + 1);
+      data[item.key].updated_at  = new Date().toISOString();
+    }
+  });
+  save(data);
+
+  const items = Object.entries(data)
+    .map(([key, v]) => ({ key, ...v }))
+    .sort((a, b) => parseFloat(a.prioridade) - parseFloat(b.prioridade));
+  res.json({ ok: true, items });
+});
+
+// DELETE /api/prioridades/:key — qualquer um pode remover
 router.delete('/prioridades/:key', (req, res) => {
   const { key } = req.params;
-  const { dpo } = req.body;
-  const data = { ...load() };
-  const existing = data[key];
-
-  if (!existing) return res.status(404).json({ error: 'Priorização não encontrada' });
-  if (existing.dpo !== dpo) {
-    return res.status(403).json({ error: `Esta priorização foi definida por ${existing.dpo} e não pode ser removida por você.` });
-  }
-
+  const data     = { ...load() };
+  if (!data[key]) return res.status(404).json({ error: 'Priorização não encontrada' });
   delete data[key];
   save(data);
   res.json({ ok: true });

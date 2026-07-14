@@ -62,8 +62,9 @@ export const getStatusReport = (area = 'G&C', sprint = null) => {
 // Plataforma
 export const getPlataforma   = () => api.get('/plataforma').then((r) => r.data);
 export const getPrioridades  = () => api.get('/prioridades').then((r) => r.data);
-export const setPrioridade   = (key, body) => api.post(`/prioridades/${key}`, body).then((r) => r.data);
-export const deletePrioridade = (key, dpo) => api.delete(`/prioridades/${key}`, { data: { dpo } }).then((r) => r.data);
+export const setPrioridade    = (key, body) => api.post(`/prioridades/${key}`, body).then((r) => r.data);
+export const reorderPrioridades = (order) => api.put('/prioridades/reorder', { order }).then((r) => r.data);
+export const deletePrioridade = (key) => api.delete(`/prioridades/${key}`).then((r) => r.data);
 
 // Entregas
 export const getEntregas = (area = 'TODAS') => {
