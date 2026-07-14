@@ -2,16 +2,42 @@ const express = require('express');
 const axios   = require('axios');
 const router  = express.Router();
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PRIORIDADES HARDCODADAS — edite aqui para salvar permanentemente.
-// "DDPL-XXXX": { prioridade:"1", responsavel:"Nome", story_points:"5", atividade:"Título" }
-// ─────────────────────────────────────────────────────────────────────────────
-const HARDCODED = {};
+// ── Persistência: Supabase em prod, memória em dev ────────────────────────────
 
-let store = JSON.parse(JSON.stringify(HARDCODED));
+let memStore = {};
 
-function load()       { return store; }
-function save(data)   { store = data; }
+function getSupabase() {
+  const { createClient } = require('@supabase/supabase-js');
+  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+}
+
+async function load() {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('prioridades_store')
+      .select('data')
+      .eq('id', 'main')
+      .single();
+    if (error) throw new Error(`Supabase load: ${error.message}`);
+    return data?.data || {};
+  }
+  return memStore;
+}
+
+async function save(payload) {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('prioridades_store')
+      .upsert({ id: 'main', data: payload, updated_at: new Date().toISOString() });
+    if (error) throw new Error(`Supabase save: ${error.message}`);
+  } else {
+    memStore = payload;
+  }
+}
+
+// ── Jira helpers ──────────────────────────────────────────────────────────────
 
 function getHeaders() {
   const token = Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_TOKEN}`).toString('base64');
@@ -35,17 +61,18 @@ async function cleanupEmAndamento(data) {
         changed = true;
       }
     }
-    if (changed) save(data);
+    if (changed) await save(data);
   } catch (e) {
     console.error('Cleanup Em Andamento falhou:', e.message);
   }
   return data;
 }
 
-// GET /api/prioridades
+// ── GET /api/prioridades ──────────────────────────────────────────────────────
+
 router.get('/prioridades', async (req, res) => {
   try {
-    let data = { ...load() };
+    let data = { ...(await load()) };
     data = await cleanupEmAndamento(data);
     const items = Object.entries(data)
       .map(([key, v]) => ({ key, ...v }))
@@ -56,60 +83,74 @@ router.get('/prioridades', async (req, res) => {
   }
 });
 
-// POST /api/prioridades/:key — sem lock por DPO
-router.post('/prioridades/:key', (req, res) => {
+// ── POST /api/prioridades/:key ────────────────────────────────────────────────
+
+router.post('/prioridades/:key', async (req, res) => {
   const { key } = req.params;
-  const { prioridade, responsavel, atividade, story_points, dpo } = req.body;
+  const { prioridade, responsavel, atividade, story_points } = req.body;
 
   if (prioridade === undefined || String(prioridade).trim() === '') {
     return res.status(400).json({ error: 'prioridade é obrigatória' });
   }
 
-  const data     = { ...load() };
-  const existing = data[key];
+  try {
+    const data     = { ...(await load()) };
+    const existing = data[key];
 
-  data[key] = {
-    prioridade:   String(prioridade).trim(),
-    responsavel:  responsavel  || '',
-    story_points: story_points || '',
-    atividade:    atividade    || key,
-    dpo:          dpo          || existing?.dpo || '',
-    locked_at:    existing?.locked_at || new Date().toISOString(),
-    updated_at:   new Date().toISOString(),
-  };
+    data[key] = {
+      prioridade:   String(prioridade).trim(),
+      responsavel:  responsavel  || '',
+      story_points: story_points || '',
+      atividade:    atividade    || key,
+      locked_at:    existing?.locked_at || new Date().toISOString(),
+      updated_at:   new Date().toISOString(),
+    };
 
-  save(data);
-  res.json({ ok: true, item: { key, ...data[key] } });
+    await save(data);
+    res.json({ ok: true, item: { key, ...data[key] } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// PUT /api/prioridades/reorder — reordena em lote após drag-and-drop
-router.put('/prioridades/reorder', (req, res) => {
-  const { order } = req.body; // [{ key, ...campos }]
+// ── PUT /api/prioridades/reorder ──────────────────────────────────────────────
+
+router.put('/prioridades/reorder', async (req, res) => {
+  const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'order deve ser array' });
 
-  const data = { ...load() };
-  order.forEach((item, idx) => {
-    if (data[item.key]) {
-      data[item.key].prioridade  = String(idx + 1);
-      data[item.key].updated_at  = new Date().toISOString();
-    }
-  });
-  save(data);
+  try {
+    const data = { ...(await load()) };
+    order.forEach((item, idx) => {
+      if (data[item.key]) {
+        data[item.key].prioridade = String(idx + 1);
+        data[item.key].updated_at = new Date().toISOString();
+      }
+    });
+    await save(data);
 
-  const items = Object.entries(data)
-    .map(([key, v]) => ({ key, ...v }))
-    .sort((a, b) => parseFloat(a.prioridade) - parseFloat(b.prioridade));
-  res.json({ ok: true, items });
+    const items = Object.entries(data)
+      .map(([key, v]) => ({ key, ...v }))
+      .sort((a, b) => parseFloat(a.prioridade) - parseFloat(b.prioridade));
+    res.json({ ok: true, items });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// DELETE /api/prioridades/:key — qualquer um pode remover
-router.delete('/prioridades/:key', (req, res) => {
+// ── DELETE /api/prioridades/:key ──────────────────────────────────────────────
+
+router.delete('/prioridades/:key', async (req, res) => {
   const { key } = req.params;
-  const data     = { ...load() };
-  if (!data[key]) return res.status(404).json({ error: 'Priorização não encontrada' });
-  delete data[key];
-  save(data);
-  res.json({ ok: true });
+  try {
+    const data = { ...(await load()) };
+    if (!data[key]) return res.status(404).json({ error: 'Priorização não encontrada' });
+    delete data[key];
+    await save(data);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;
