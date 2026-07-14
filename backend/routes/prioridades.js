@@ -71,14 +71,18 @@ async function cleanupEmAndamento(data) {
 // ── GET /api/prioridades ──────────────────────────────────────────────────────
 
 router.get('/prioridades', async (req, res) => {
+  console.log('[GET /prioridades] USE_SUPABASE=', USE_SUPABASE);
   try {
     let data = await load();
+    console.log('[GET /prioridades] load() retornou', Object.keys(data).length, 'itens');
     data = await cleanupEmAndamento(data);
     const items = Object.entries(data)
       .map(([key, v]) => ({ key, ...v }))
       .sort((a, b) => parseFloat(a.prioridade) - parseFloat(b.prioridade));
+    console.log('[GET /prioridades] retornando', items.length, 'itens');
     res.json({ items, byKey: data });
   } catch (e) {
+    console.error('[GET /prioridades] ERRO:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -88,8 +92,11 @@ router.get('/prioridades', async (req, res) => {
 router.post('/prioridades/:key', async (req, res) => {
   const { key } = req.params;
   const { prioridade, atividade } = req.body;
+  console.log(`[POST /prioridades/${key}] body:`, { prioridade, atividade });
+  console.log(`[POST /prioridades/${key}] USE_SUPABASE=`, USE_SUPABASE);
 
   if (!prioridade || String(prioridade).trim() === '') {
+    console.warn(`[POST /prioridades/${key}] prioridade ausente — rejeitando`);
     return res.status(400).json({ error: 'prioridade é obrigatória' });
   }
 
@@ -97,22 +104,26 @@ router.post('/prioridades/:key', async (req, res) => {
     if (USE_SUPABASE) {
       const sb = getSupabase();
 
-      // Preserva locked_at se o item já existe
-      const { data: existing } = await sb
+      const { data: existing, error: existErr } = await sb
         .from('prioridades')
         .select('locked_at')
         .eq('key', key)
         .maybeSingle();
+      if (existErr) console.warn(`[POST /prioridades/${key}] maybeSingle warn:`, existErr.message);
+      console.log(`[POST /prioridades/${key}] existing:`, existing);
 
-      const { error } = await sb.from('prioridades').upsert({
+      const payload = {
         key,
         prioridade: parseInt(String(prioridade).trim(), 10) || 999,
         atividade:  atividade || key,
         locked_at:  existing?.locked_at || new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'key' });
+      };
+      console.log(`[POST /prioridades/${key}] upsert payload:`, payload);
 
+      const { error } = await sb.from('prioridades').upsert(payload, { onConflict: 'key' });
       if (error) throw new Error(`Supabase upsert: ${error.message}`);
+      console.log(`[POST /prioridades/${key}] upsert OK`);
     } else {
       memStore[key] = {
         prioridade:  String(prioridade).trim(),
@@ -120,10 +131,12 @@ router.post('/prioridades/:key', async (req, res) => {
         locked_at:   memStore[key]?.locked_at || new Date().toISOString(),
         updated_at:  new Date().toISOString(),
       };
+      console.log(`[POST /prioridades/${key}] salvo em memória`);
     }
 
     res.json({ ok: true });
   } catch (e) {
+    console.error(`[POST /prioridades/${key}] ERRO:`, e.message);
     res.status(500).json({ error: e.message });
   }
 });
