@@ -31,6 +31,9 @@ const FIELDS = [
   'created',
   'reporter',
   'customfield_10034', // date of first response
+  'story_points',      // classic projects
+  'customfield_10016', // next-gen projects
+  'customfield_10028', // older configs
 ];
 
 const ALLOWED_REPORTERS = [
@@ -63,6 +66,7 @@ function mapIssue(issue) {
     created:        f.created           ? f.created.slice(0, 10)           : null,
     reporter:       f.reporter?.displayName || null,
     first_response: f.customfield_10034 ? f.customfield_10034.slice(0, 10) : null,
+    story_points:   f.story_points ?? f.customfield_10016 ?? f.customfield_10028 ?? null,
   };
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getPlataforma, getPrioridades, setPrioridade, reorderPrioridades, deletePrioridade } from '../services/api';
 
 const JIRA = 'https://cogna.atlassian.net';
@@ -218,11 +218,65 @@ function BacklogView({ items }) {
 
 // ── Aba Priorização ────────────────────────────────────────────────────────────
 
-const SP_OPTIONS = ['', '1', '2', '3', '5', '8', '13', '21'];
+function SearchableSelect({ options, value, onChange, placeholder = 'Selecione o item…' }) {
+  const [search, setSearch] = useState('');
+  const [open,   setOpen]   = useState(false);
+  const ref                  = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = options.filter(
+    (o) => o.label.toLowerCase().includes(search.toLowerCase()) ||
+           o.value.toLowerCase().includes(search.toLowerCase())
+  );
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div ref={ref} className="relative min-w-[340px]">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-sm bg-white dark:bg-gray-800 text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
+        <span className={selected ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <span className="text-gray-400 text-xs shrink-0">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl">
+          <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+            <input autoFocus type="text" value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por chave ou título…"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded px-2.5 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <ul className="max-h-60 overflow-y-auto py-1">
+            {filtered.length === 0 && (
+              <li className="px-3 py-2 text-sm text-gray-400 dark:text-gray-500">Nenhum resultado</li>
+            )}
+            {filtered.map((o) => (
+              <li key={o.value}
+                onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
+                className={`px-3 py-2 text-sm cursor-pointer hover:bg-primary-50 dark:hover:bg-primary-900/30 ${
+                  o.value === value ? 'bg-primary-50 dark:bg-primary-900/30 font-semibold' : ''
+                }`}>
+                {o.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
   const [addMode,   setAddMode]   = useState(false);
-  const [addForm,   setAddForm]   = useState({ key: '', responsavel: '', story_points: '' });
+  const [addForm,   setAddForm]   = useState({ key: '', responsavel: '' });
   const [editKey,   setEditKey]   = useState(null);
   const [editForm,  setEditForm]  = useState({});
   const [saving,    setSaving]    = useState(false);
@@ -275,13 +329,12 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
       const bi       = backlogItems.find((i) => i.key === addForm.key);
       const nextPrio = String(prios.items.length + 1);
       await setPrioridade(addForm.key, {
-        prioridade:   nextPrio,
-        responsavel:  addForm.responsavel.trim(),
-        story_points: addForm.story_points,
-        atividade:    bi?.summary || addForm.key,
+        prioridade:  nextPrio,
+        responsavel: addForm.responsavel.trim(),
+        atividade:   bi?.summary || addForm.key,
       });
       setAddMode(false);
-      setAddForm({ key: '', responsavel: '', story_points: '' });
+      setAddForm({ key: '', responsavel: '' });
       await onRefreshPrios();
     } catch (e) {
       setFormError(e.response?.data?.error || e.message);
@@ -296,10 +349,9 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
     try {
       const bi = backlogItems.find((i) => i.key === key);
       await setPrioridade(key, {
-        prioridade:   prios.items.find((i) => i.key === key)?.prioridade || '0',
-        responsavel:  editForm.responsavel,
-        story_points: editForm.story_points,
-        atividade:    bi?.summary || key,
+        prioridade:  prios.items.find((i) => i.key === key)?.prioridade || '0',
+        responsavel: editForm.responsavel,
+        atividade:   bi?.summary || key,
       });
       setEditKey(null);
       await onRefreshPrios();
@@ -358,29 +410,20 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
           <div className="flex flex-wrap gap-3 items-end">
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-500">Item (DDPL)</label>
-              <select value={addForm.key} onChange={(e) => setAddForm((f) => ({ ...f, key: e.target.value }))}
-                className={`${inputCls} min-w-[300px]`}>
-                <option value="">Selecione o item…</option>
-                {unprioritized.map((i) => (
-                  <option key={i.key} value={i.key}>
-                    {i.key} — {i.summary.length > 60 ? i.summary.slice(0, 60) + '…' : i.summary}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={addForm.key}
+                onChange={(val) => setAddForm((f) => ({ ...f, key: val }))}
+                options={unprioritized.map((i) => ({
+                  value: i.key,
+                  label: `${i.key} — ${i.summary.length > 70 ? i.summary.slice(0, 70) + '…' : i.summary}`,
+                }))}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-500">Responsável</label>
               <input type="text" placeholder="Nome" value={addForm.responsavel}
                 onChange={(e) => setAddForm((f) => ({ ...f, responsavel: e.target.value }))}
                 className={`${inputCls} w-44`} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500">Story Points</label>
-              <select value={addForm.story_points}
-                onChange={(e) => setAddForm((f) => ({ ...f, story_points: e.target.value }))}
-                className={`${inputCls} w-24`}>
-                {SP_OPTIONS.map((v) => <option key={v} value={v}>{v || '—'}</option>)}
-              </select>
             </div>
             <button onClick={handleAdd} disabled={saving || !addForm.key}
               className="px-4 py-1.5 text-sm font-medium bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition-colors">
@@ -469,17 +512,11 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
                     </div>
                   </td>
 
-                  {/* Story Points */}
+                  {/* Story Points (somente leitura — vem do Jira) */}
                   <td className="px-3 py-3 text-center">
-                    {isEditing ? (
-                      <select value={editForm.story_points}
-                        onChange={(e) => setEditForm((f) => ({ ...f, story_points: e.target.value }))}
-                        className="w-16 border border-blue-300 dark:border-blue-600 rounded px-1 py-1 text-sm text-center bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">
-                        {SP_OPTIONS.map((v) => <option key={v} value={v}>{v || '—'}</option>)}
-                      </select>
-                    ) : item.story_points ? (
+                    {bi?.story_points != null ? (
                       <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-xs font-bold">
-                        {item.story_points}
+                        {bi.story_points}
                       </span>
                     ) : (
                       <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
@@ -509,7 +546,7 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
                     ) : (
                       <div className="flex gap-1 justify-center">
                         <button
-                          onClick={() => { setEditKey(item.key); setEditForm({ responsavel: item.responsavel || '', story_points: item.story_points || '' }); setFormError(null); }}
+                          onClick={() => { setEditKey(item.key); setEditForm({ responsavel: item.responsavel || '' }); setFormError(null); }}
                           className="text-xs px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 rounded-lg">
                           Editar
                         </button>
