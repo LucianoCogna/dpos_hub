@@ -2,66 +2,66 @@ const express = require('express');
 const axios   = require('axios');
 const router  = express.Router();
 
-// ── Persistência: Supabase em prod, memória em dev ────────────────────────────
+// ── Clientes ──────────────────────────────────────────────────────────────────
 
-let memStore = {};
+const USE_SUPABASE = !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
 
 function getSupabase() {
   const { createClient } = require('@supabase/supabase-js');
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 }
 
-async function load() {
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('prioridades_store')
-      .select('data')
-      .eq('id', 'main')
-      .single();
-    if (error) throw new Error(`Supabase load: ${error.message}`);
-    return data?.data || {};
-  }
-  return memStore;
-}
+// Fallback em memória para desenvolvimento local
+let memStore = {};
 
-async function save(payload) {
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-    const supabase = getSupabase();
-    const { error } = await supabase
-      .from('prioridades_store')
-      .upsert({ id: 'main', data: payload, updated_at: new Date().toISOString() });
-    if (error) throw new Error(`Supabase save: ${error.message}`);
-  } else {
-    memStore = payload;
-  }
-}
-
-// ── Jira helpers ──────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getHeaders() {
   const token = Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_TOKEN}`).toString('base64');
   return { Authorization: `Basic ${token}`, 'Content-Type': 'application/json' };
 }
 
+// Retorna { 'DDPL-X': { prioridade, atividade, locked_at, updated_at }, ... }
+async function load() {
+  if (USE_SUPABASE) {
+    const { data, error } = await getSupabase()
+      .from('prioridades')
+      .select('*')
+      .order('prioridade');
+    if (error) throw new Error(`Supabase load: ${error.message}`);
+    const result = {};
+    for (const row of data || []) {
+      result[row.key] = {
+        prioridade: String(row.prioridade),
+        atividade:  row.atividade || row.key,
+        locked_at:  row.locked_at,
+        updated_at: row.updated_at,
+      };
+    }
+    return result;
+  }
+  return memStore;
+}
+
 async function cleanupEmAndamento(data) {
   const keys = Object.keys(data);
   if (!keys.length) return data;
   try {
-    const url = `${process.env.JIRA_BASE_URL}/rest/api/3/search/jql`;
     const { data: jira } = await axios.post(
-      url,
+      `${process.env.JIRA_BASE_URL}/rest/api/3/search/jql`,
       { jql: `issueKey in (${keys.join(',')})`, fields: ['status'], maxResults: 200 },
       { headers: getHeaders(), timeout: 10000 }
     );
-    let changed = false;
-    for (const issue of jira.issues || []) {
-      if ((issue.fields.status?.name || '') === 'Em Andamento') {
-        delete data[issue.key];
-        changed = true;
+    const toRemove = (jira.issues || [])
+      .filter((i) => (i.fields.status?.name || '') === 'Em Andamento')
+      .map((i) => i.key);
+
+    if (toRemove.length > 0) {
+      if (USE_SUPABASE) {
+        await getSupabase().from('prioridades').delete().in('key', toRemove);
       }
+      toRemove.forEach((k) => delete data[k]);
     }
-    if (changed) await save(data);
   } catch (e) {
     console.error('Cleanup Em Andamento falhou:', e.message);
   }
@@ -72,7 +72,7 @@ async function cleanupEmAndamento(data) {
 
 router.get('/prioridades', async (req, res) => {
   try {
-    let data = { ...(await load()) };
+    let data = await load();
     data = await cleanupEmAndamento(data);
     const items = Object.entries(data)
       .map(([key, v]) => ({ key, ...v }))
@@ -83,52 +83,80 @@ router.get('/prioridades', async (req, res) => {
   }
 });
 
-// ── POST /api/prioridades/:key ────────────────────────────────────────────────
+// ── POST /api/prioridades/:key — upsert de UMA linha apenas ──────────────────
 
 router.post('/prioridades/:key', async (req, res) => {
   const { key } = req.params;
-  const { prioridade, responsavel, atividade, story_points } = req.body;
+  const { prioridade, atividade } = req.body;
 
-  if (prioridade === undefined || String(prioridade).trim() === '') {
+  if (!prioridade || String(prioridade).trim() === '') {
     return res.status(400).json({ error: 'prioridade é obrigatória' });
   }
 
   try {
-    const data     = { ...(await load()) };
-    const existing = data[key];
+    if (USE_SUPABASE) {
+      const sb = getSupabase();
 
-    data[key] = {
-      prioridade:   String(prioridade).trim(),
-      responsavel:  responsavel  || '',
-      story_points: story_points || '',
-      atividade:    atividade    || key,
-      locked_at:    existing?.locked_at || new Date().toISOString(),
-      updated_at:   new Date().toISOString(),
-    };
+      // Preserva locked_at se o item já existe
+      const { data: existing } = await sb
+        .from('prioridades')
+        .select('locked_at')
+        .eq('key', key)
+        .maybeSingle();
 
-    await save(data);
-    res.json({ ok: true, item: { key, ...data[key] } });
+      const { error } = await sb.from('prioridades').upsert({
+        key,
+        prioridade: parseInt(String(prioridade).trim(), 10) || 999,
+        atividade:  atividade || key,
+        locked_at:  existing?.locked_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' });
+
+      if (error) throw new Error(`Supabase upsert: ${error.message}`);
+    } else {
+      memStore[key] = {
+        prioridade:  String(prioridade).trim(),
+        atividade:   atividade || key,
+        locked_at:   memStore[key]?.locked_at || new Date().toISOString(),
+        updated_at:  new Date().toISOString(),
+      };
+    }
+
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ── PUT /api/prioridades/reorder ──────────────────────────────────────────────
+// ── PUT /api/prioridades/reorder — atualiza só a coluna prioridade ────────────
 
 router.put('/prioridades/reorder', async (req, res) => {
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'order deve ser array' });
 
   try {
-    const data = { ...(await load()) };
-    order.forEach((item, idx) => {
-      if (data[item.key]) {
-        data[item.key].prioridade = String(idx + 1);
-        data[item.key].updated_at = new Date().toISOString();
-      }
-    });
-    await save(data);
+    if (USE_SUPABASE) {
+      const sb = getSupabase();
+      // Upsert em lote: só prioridade + updated_at; atividade/locked_at ficam intactos
+      const { error } = await sb.from('prioridades').upsert(
+        order.map((item, idx) => ({
+          key:        item.key,
+          prioridade: idx + 1,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: 'key' }
+      );
+      if (error) throw new Error(`Supabase reorder: ${error.message}`);
+    } else {
+      order.forEach((item, idx) => {
+        if (memStore[item.key]) {
+          memStore[item.key].prioridade = String(idx + 1);
+          memStore[item.key].updated_at = new Date().toISOString();
+        }
+      });
+    }
 
+    const data  = await load();
     const items = Object.entries(data)
       .map(([key, v]) => ({ key, ...v }))
       .sort((a, b) => parseFloat(a.prioridade) - parseFloat(b.prioridade));
@@ -143,10 +171,15 @@ router.put('/prioridades/reorder', async (req, res) => {
 router.delete('/prioridades/:key', async (req, res) => {
   const { key } = req.params;
   try {
-    const data = { ...(await load()) };
-    if (!data[key]) return res.status(404).json({ error: 'Priorização não encontrada' });
-    delete data[key];
-    await save(data);
+    if (USE_SUPABASE) {
+      const { error } = await getSupabase()
+        .from('prioridades')
+        .delete()
+        .eq('key', key);
+      if (error) throw new Error(`Supabase delete: ${error.message}`);
+    } else {
+      delete memStore[key];
+    }
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
