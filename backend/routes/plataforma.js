@@ -38,7 +38,7 @@ const FIELDS = [
 
 const ALLOWED_REPORTERS = [
   'luciano de oliveira santos',
-  'daniele brito',
+  'daniele',
   'erika',
   'rosilaine',
   'karla',
