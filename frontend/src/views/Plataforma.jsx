@@ -328,14 +328,16 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
     try {
       const bi       = backlogItems.find((i) => i.key === addForm.key);
       const nextPrio = String(prios.items.length + 1);
-      await setPrioridade(addForm.key, {
-        prioridade: nextPrio,
-        atividade:  bi?.summary || addForm.key,
-      });
+      const payload  = { prioridade: nextPrio, atividade: bi?.summary || addForm.key };
+      console.log('[Priorização] handleAdd → key:', addForm.key, 'payload:', payload);
+      const result = await setPrioridade(addForm.key, payload);
+      console.log('[Priorização] handleAdd → resposta do servidor:', result);
       setAddMode(false);
       setAddForm({ key: '' });
-      await onRefreshPrios();
+      const refreshed = await onRefreshPrios();
+      console.log('[Priorização] handleAdd → prios após refresh:', refreshed);
     } catch (e) {
+      console.error('[Priorização] handleAdd → ERRO:', e.response?.data || e.message, e);
       setFormError(e.response?.data?.error || e.message);
     } finally {
       setSaving(false);
@@ -346,14 +348,15 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
   const handleSaveEdit = async (key) => {
     setSaving(true); setFormError(null);
     try {
-      const bi = backlogItems.find((i) => i.key === key);
-      await setPrioridade(key, {
-        prioridade: prios.items.find((i) => i.key === key)?.prioridade || '0',
-        atividade:  bi?.summary || key,
-      });
+      const bi      = backlogItems.find((i) => i.key === key);
+      const payload = { prioridade: prios.items.find((i) => i.key === key)?.prioridade || '0', atividade: bi?.summary || key };
+      console.log('[Priorização] handleSaveEdit → key:', key, 'payload:', payload);
+      const result = await setPrioridade(key, payload);
+      console.log('[Priorização] handleSaveEdit → resposta:', result);
       setEditKey(null);
       await onRefreshPrios();
     } catch (e) {
+      console.error('[Priorização] handleSaveEdit → ERRO:', e.response?.data || e.message, e);
       setFormError(e.response?.data?.error || e.message);
     } finally {
       setSaving(false);
@@ -365,9 +368,12 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
     if (!window.confirm(`Remover priorização de ${key}?`)) return;
     setSaving(true); setFormError(null);
     try {
+      console.log('[Priorização] handleDelete → key:', key);
       await deletePrioridade(key);
+      console.log('[Priorização] handleDelete → removido com sucesso');
       await onRefreshPrios();
     } catch (e) {
+      console.error('[Priorização] handleDelete → ERRO:', e.response?.data || e.message, e);
       setFormError(e.response?.data?.error || e.message);
     } finally {
       setSaving(false);
