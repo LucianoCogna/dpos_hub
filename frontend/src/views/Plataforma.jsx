@@ -559,7 +559,7 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
 // ── Componente principal ───────────────────────────────────────────────────────
 
 export default function Plataforma() {
-  const [tab,        setTab]        = useState('backlog');
+  const [tab,        setTab]        = useState('priorizacao');
   const [data,       setData]       = useState(null);
   const [prios,      setPrios]      = useState({ items: [], byKey: {} });
   const [loading,    setLoading]    = useState(false);
@@ -650,10 +650,10 @@ export default function Plataforma() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
         {[
+          { id: 'priorizacao',  label: 'Priorização',  badge: prios.items.length || null },
           { id: 'backlog',      label: 'Backlog' },
           { id: 'em-andamento', label: 'Em Andamento', badge: allItems.filter(i => i.status === 'Em Andamento').length || null },
           { id: 'bloqueadas',   label: 'Bloqueadas',   badge: allItems.filter(i => ['Bloqueado', 'Blocked', 'Impedido'].includes(i.status)).length || null },
-          { id: 'priorizacao',  label: 'Priorização',  badge: prios.items.length || null },
         ].map(({ id, label, badge }) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 -mb-px ${
