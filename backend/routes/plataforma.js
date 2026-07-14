@@ -38,13 +38,13 @@ const FIELDS = [
 
 const ALLOWED_REPORTERS = [
   'luciano de oliveira santos',
-  'daniele',
-  'erika',
-  'rosilaine',
-  'karla',
+  'daniele santana de brito',
+  'erika andressa',
+  'rosilaine papa',
+  'karla ynonye',
   'pauletti',
-  'carol',
-  'gilson',
+  'carolina teixeira',
+  'gilson dos santos',
 ];
 
 function isAllowedReporter(displayName) {
