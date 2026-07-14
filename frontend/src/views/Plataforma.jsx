@@ -400,6 +400,7 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
               <th className="text-left   px-3 py-3 w-28">DDPL</th>
               <th className="text-left   px-3 py-3">Atividade</th>
               <th className="text-left   px-3 py-3 w-28">Status</th>
+              <th className="text-left   px-3 py-3">Etiquetas</th>
               <th className="text-center px-3 py-3 w-16">SP</th>
               <th className="text-left   px-3 py-3 w-36">Responsável</th>
               <th className="text-center px-3 py-3 w-24">Ações</th>
@@ -452,6 +453,20 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
                   {/* Status */}
                   <td className="px-3 py-3">
                     <StatusBadge status={bi?.status || '—'} />
+                  </td>
+
+                  {/* Etiquetas */}
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(bi?.labels || []).length > 0
+                        ? (bi.labels).map((l) => (
+                            <span key={l} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-medium">
+                              {l}
+                            </span>
+                          ))
+                        : <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                      }
+                    </div>
                   </td>
 
                   {/* Story Points */}
@@ -511,7 +526,7 @@ function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
 
             {prios.items.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-gray-400 dark:text-gray-600 text-sm">
+                <td colSpan={9} className="text-center py-12 text-gray-400 dark:text-gray-600 text-sm">
                   Nenhum item priorizado. Clique em "+ Adicionar" para começar.
                 </td>
               </tr>
