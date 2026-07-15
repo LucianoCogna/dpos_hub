@@ -271,7 +271,7 @@ function classify(items, today, currentSprint, nextSp) {
     // ── Finalizados ────────────────────────────────────────────────────────
     if (DONE_STATUSES.includes(status)) {
       result.finalizados.push(it);
-      if (implant && sprintForDate(implant) === currentSprint) {
+      if ((implant && sprintForDate(implant) === currentSprint) || sprint === currentSprint) {
         result.current_done.push(it);
       }
       continue; // não aparece em sprint cards nem no gantt
