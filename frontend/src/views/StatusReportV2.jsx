@@ -1436,7 +1436,7 @@ export default function StatusReportV2() {
                 {/* Finalizados — agrupados por PI > Sprint */}
                 <Card delay={240} style={{ flex:2,padding:18 }}>
                   <SectionLabel text={`Finalizados · ${(cls.finalizados||[]).length}`} color={T.green} icon="✅" />
-                  <div style={{ fontSize:11,color:T.textMut,marginBottom:10,marginTop:-4 }}>Pronto / Em produção / Aceito com data de implantação</div>
+                  <div style={{ fontSize:11,color:T.textMut,marginBottom:10,marginTop:-4 }}>Pronto / Em produção / Aceito / Aceite com data de implantação</div>
                   {!(cls.finalizados||[]).length
                     ? <Empty label="Nenhum finalizado encontrado" />
                     : (() => {

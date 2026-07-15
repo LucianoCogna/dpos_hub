@@ -250,7 +250,7 @@ function classify(items, today, currentSprint, nextSp) {
 
   const t = today || new Date();
 
-  const DONE_STATUSES     = ['Pronto', 'Em produção', 'Aceito'];
+  const DONE_STATUSES     = ['Pronto', 'Em produção', 'Aceito', 'Aceite'];
   const HOMOLOG_STATUSES  = ['Homologação', 'Concluído'];
   const UPSTREAM_STATUSES = ['Refinamento', 'Backlog'];
 
