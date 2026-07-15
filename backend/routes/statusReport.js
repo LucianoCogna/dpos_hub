@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
@@ -269,13 +269,10 @@ function classify(items, today, currentSprint, nextSp) {
     }
 
     // ── Finalizados ────────────────────────────────────────────────────────
-    // Pronto / Em produção / Aceito — exige implant para contar como finalizado
     if (DONE_STATUSES.includes(status)) {
-      if (implant) {
-        result.finalizados.push(it);
-        if (sprintForDate(implant) === currentSprint) {
-          result.current_done.push(it);
-        }
+      result.finalizados.push(it);
+      if (implant && sprintForDate(implant) === currentSprint) {
+        result.current_done.push(it);
       }
       continue; // não aparece em sprint cards nem no gantt
     }
