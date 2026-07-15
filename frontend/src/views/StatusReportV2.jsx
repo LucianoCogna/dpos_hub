@@ -1433,39 +1433,29 @@ export default function StatusReportV2() {
                   }
                 </Card>
 
-                {/* Finalizados — agrupados por PI > Sprint */}
+                {/* Finalizados — agrupados por Sprint */}
                 <Card delay={240} style={{ flex:2,padding:18 }}>
                   <SectionLabel text={`Finalizados · ${(cls.finalizados||[]).length}`} color={T.green} icon="✅" />
-                  <div style={{ fontSize:11,color:T.textMut,marginBottom:10,marginTop:-4 }}>Pronto / Em produção / Aceito / Aceite com data de implantação</div>
+                  <div style={{ fontSize:11,color:T.textMut,marginBottom:10,marginTop:-4 }}>Pronto / Em produção / Aceito</div>
                   {!(cls.finalizados||[]).length
                     ? <Empty label="Nenhum finalizado encontrado" />
                     : (() => {
-                        // Agrupa por PI (primeiros 4 chars da sprint) > Sprint
-                        const byPi = {};
+                        const bySprint = {};
                         for (const it of (cls.finalizados||[])) {
-                          const pi = it.sprint?.slice(0,4) || 'Sem PI';
                           const sp = it.sprint || 'Sem sprint';
-                          if (!byPi[pi]) byPi[pi] = {};
-                          if (!byPi[pi][sp]) byPi[pi][sp] = [];
-                          byPi[pi][sp].push(it);
+                          if (!bySprint[sp]) bySprint[sp] = [];
+                          bySprint[sp].push(it);
                         }
-                        return Object.entries(byPi).sort().map(([pi, bySprint]) => (
-                          <div key={pi} style={{ marginBottom:14 }}>
-                            <div style={{ fontSize:10,fontWeight:800,color:T.purple,letterSpacing:1,marginBottom:6,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`,paddingBottom:4 }}>
-                              PI {pi}
+                        return Object.entries(bySprint).sort().map(([sp, spItems]) => (
+                          <div key={sp} style={{ marginBottom:8 }}>
+                            <div style={{ fontSize:9.5,fontWeight:700,color:T.textMut,marginBottom:3,paddingLeft:6,borderBottom:`1px solid ${T.border}`,paddingBottom:3 }}>
+                              Sprint {sp} · {spItems.length}
                             </div>
-                            {Object.entries(bySprint).sort().map(([sp, spItems]) => (
-                              <div key={sp} style={{ marginBottom:8 }}>
-                                <div style={{ fontSize:9.5,fontWeight:700,color:T.textMut,marginBottom:3,paddingLeft:6 }}>
-                                  Sprint {sp} · {spItems.length}
-                                </div>
-                                {spItems.map((it) => (
-                                  <ItemRow key={it.key} item={it}
-                                    badge={it.implant ? fmtFull(it.implant) : '✓'}
-                                    badgeColor={T.green} accent={T.green} bg={T.greenLight}
-                                  />
-                                ))}
-                              </div>
+                            {spItems.map((it) => (
+                              <ItemRow key={it.key} item={it}
+                                badge={it.implant ? fmtFull(it.implant) : '✓'}
+                                badgeColor={T.green} accent={T.green} bg={T.greenLight}
+                              />
                             ))}
                           </div>
                         ));
