@@ -1140,15 +1140,14 @@ export default function StatusReportV2() {
     setPdfLoading(true);
 
     const el = pdfRef.current;
-    // Move para viewport (browser só pinta o que está na tela)
-    // O overlay de loading cobre o elemento durante a captura
-    el.style.position = 'fixed';
-    el.style.left     = '0px';
-    el.style.top      = '0px';
-    el.style.zIndex   = '-1'; // atrás do overlay
+    // Move para viewport. zIndex positivo é obrigatório: com zIndex negativo o
+    // browser não pinta elementos fixed e html2canvas captura tudo em branco.
+    // O overlay de loading (zIndex 9999) cobre visualmente durante a captura.
+    el.style.left   = '0px';
+    el.style.zIndex = '1';
 
-    // Aguarda 2 frames para o browser pintar antes de capturar
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // 300ms para o browser pintar completamente antes de capturar
+    await new Promise((r) => setTimeout(r, 300));
 
     try {
       await html2pdf().set({
@@ -1160,7 +1159,6 @@ export default function StatusReportV2() {
         pagebreak: { mode:'css', before:'.pdf-break' },
       }).from(el).save();
     } finally {
-      // Devolve para fora da tela
       el.style.left   = '-2200px';
       el.style.zIndex = '';
       setPdfLoading(false);
