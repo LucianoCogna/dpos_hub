@@ -286,6 +286,13 @@ function classify(items, today, currentSprint, nextSp) {
     // ── A partir daqui: item ativo com sprint ──────────────────────────────
     result.gantt.push(it);
 
+    // Homologação: inclui sprints anteriores à atual (item entregue mas aguardando aceite)
+    if (HOMOLOG_STATUSES.includes(status) && sprintIndex(sprint) <= sprintIndex(currentSprint)) {
+      const diasHomolog = implant ? Math.floor((t - implant) / 86400000) : null;
+      result.current_homolog.push({ ...it, _dias_homolog: diasHomolog });
+      result.next_homolog.push({ ...it, _badge: 'Continua' });
+    }
+
     if (sprint === currentSprint) {
 
       if (UPSTREAM_STATUSES.includes(status)) {
@@ -304,12 +311,6 @@ function classify(items, today, currentSprint, nextSp) {
           : null;
         result.current_downstream.push({ ...it, _atraso: atraso });
         result.next_homolog.push({ ...it, _badge: 'Downstream → Hom.' });
-
-      } else if (HOMOLOG_STATUSES.includes(status)) {
-        // Concluído (Jira) = Homologação no relatório (aguardando aceite)
-        const diasHomolog = implant ? Math.floor((t - implant) / 86400000) : null;
-        result.current_homolog.push({ ...it, _dias_homolog: diasHomolog });
-        result.next_homolog.push({ ...it, _badge: 'Continua' });
       }
     }
 
