@@ -164,14 +164,21 @@ const INCIDENT_FIELDS = [
 function mapDaplItem(issue) {
   const f = issue.fields;
 
-  // Sprint: última entrada da lista = sprint atual do card
-  const rawSprints = (f.customfield_10020 || []).map((s) => {
-    let nm = s.name || '';
-    if (nm.startsWith('SP ')) nm = nm.slice(3);
-    return nm;
+  // Sprint: prefere ACTIVE, depois maior ID (Jira não garante ordem na array)
+  const allSprints = f.customfield_10020 || [];
+  const sorted = [...allSprints].sort((a, b) => {
+    if (a.state === 'ACTIVE' && b.state !== 'ACTIVE') return -1;
+    if (b.state === 'ACTIVE' && a.state !== 'ACTIVE') return 1;
+    return (b.id || 0) - (a.id || 0);
   });
-  const sprint        = rawSprints.length ? rawSprints[rawSprints.length - 1] : null;
-  const sprints_count = rawSprints.length;
+  const latestSprint  = sorted[0] || null;
+  let sprint = null;
+  if (latestSprint) {
+    let nm = latestSprint.name || '';
+    if (nm.startsWith('SP ')) nm = nm.slice(3);
+    sprint = nm;
+  }
+  const sprints_count = allSprints.length;
 
   // Size via components
   const sizeComp = (f.components || []).find((c) => (c.name || '').startsWith('size-'));
