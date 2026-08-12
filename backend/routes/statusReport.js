@@ -420,12 +420,10 @@ router.get('/status-report', async (req, res) => {
         `project = DAPL AND labels = "${config.label}" AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`,
         DAPL_FIELDS
       );
-      console.log(`[status-report] ${areaKey}: ${storyIssues.length} issues retornados do Jira`);
     } catch (e) {
-      console.error(`[status-report] ERRO ao buscar DAPLs do Jira:`, e.response?.data || e.message);
+      console.error(`[status-report] ERRO ao buscar DAPLs do Jira (${areaKey}):`, e.response?.data || e.message);
     }
     const items = storyIssues.map(mapDaplItem);
-    console.log(`[status-report] ${areaKey}: ${items.length} items mapeados, sprint corrente=${currentSprint}`);
 
     // Incidentes (se área tiver DENA)
     let incidents = [];
