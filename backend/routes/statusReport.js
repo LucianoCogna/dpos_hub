@@ -414,11 +414,18 @@ router.get('/status-report', async (req, res) => {
     const nextSp = nextSprint(currentSprint);
 
     // Apenas Histórias do projeto DAPL — épicos nunca são exibidos, parent vem via campo "parent"
-    const storyIssues = await fetchAll(
-      `project = DAPL AND labels = "${config.label}" AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`,
-      DAPL_FIELDS
-    ).catch(() => []);
+    let storyIssues = [];
+    try {
+      storyIssues = await fetchAll(
+        `project = DAPL AND labels = "${config.label}" AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`,
+        DAPL_FIELDS
+      );
+      console.log(`[status-report] ${areaKey}: ${storyIssues.length} issues retornados do Jira`);
+    } catch (e) {
+      console.error(`[status-report] ERRO ao buscar DAPLs do Jira:`, e.response?.data || e.message);
+    }
     const items = storyIssues.map(mapDaplItem);
+    console.log(`[status-report] ${areaKey}: ${items.length} items mapeados, sprint corrente=${currentSprint}`);
 
     // Incidentes (se área tiver DENA)
     let incidents = [];
