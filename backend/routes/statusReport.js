@@ -271,9 +271,10 @@ function classify(items, today, currentSprint, nextSp) {
 
   const t = today || new Date();
 
-  const DONE_STATUSES     = ['Pronto', 'Em produção', 'Aceito', 'Aceite'];
-  const HOMOLOG_STATUSES  = ['Homologação', 'Concluído'];
-  const UPSTREAM_STATUSES = ['Refinamento', 'Backlog'];
+  const DONE_STATUSES        = ['Pronto', 'Em produção', 'Aceito', 'Aceite'];
+  const HOMOLOG_STATUSES     = ['Homologação', 'Concluído', 'Em teste'];
+  const UPSTREAM_STATUSES    = ['Refinamento', 'Backlog'];
+  const DOWNSTREAM_STATUSES  = ['Em Andamento', 'Em Desenvolvimento'];
 
   for (const it of items) {
     const { status, sprint, duedate, implant, size } = it;
@@ -284,7 +285,7 @@ function classify(items, today, currentSprint, nextSp) {
     // ── Bloqueados ─────────────────────────────────────────────────────────
     if (status === 'Bloqueado') {
       result.all_blocked.push(it);
-      if (sprint === currentSprint) result.current_blocked.push(it);
+      if (sprint && sprintIndex(sprint) <= sprintIndex(currentSprint)) result.current_blocked.push(it);
       if (sprint) result.gantt.push(it);
       continue;
     }
@@ -314,7 +315,7 @@ function classify(items, today, currentSprint, nextSp) {
       result.next_homolog.push({ ...it, _badge: 'Continua' });
     }
 
-    if (sprint === currentSprint) {
+    if (sprint && sprintIndex(sprint) <= sprintIndex(currentSprint)) {
 
       if (UPSTREAM_STATUSES.includes(status)) {
         result.current_upstream.push(it);
@@ -326,7 +327,7 @@ function classify(items, today, currentSprint, nextSp) {
           result.next_downstream.push({ ...it, _badge: 'UP → DN' });
         }
 
-      } else if (status === 'Em Andamento') {
+      } else if (DOWNSTREAM_STATUSES.includes(status)) {
         const atraso = duedate && new Date(duedate) < t
           ? Math.floor((t - new Date(duedate)) / 86400000)
           : null;
