@@ -66,9 +66,9 @@ const AREA_CONFIG = {
 // ── Área config — Revenue Office (DDRE) ──────────────────────────────────────
 
 const DDRE_AREA_CONFIG = {
-  'NFT_CAMPANHAS_FATURAMENTO': { labels: ['NFT', 'Campanhas', 'Faturamento'], display: 'NFT+Campanhas+Faturamento', denaEpic: null, page3: false },
-  'RENTABILIZACAO':            { labels: ['Rentabilização'],                  display: 'Rentabilização',            denaEpic: null, page3: false },
-  'REMATRICULA':               { labels: ['Rematricula'],                     display: 'Rematricula',               denaEpic: null, page3: false },
+  'NFT_CAMPANHAS_FATURAMENTO': { label: 'NFT+Campanhas+Faturamento', display: 'NFT+Campanhas+Faturamento', denaEpic: null, page3: false },
+  'RENTABILIZACAO':            { label: 'Rentabilização',            display: 'Rentabilização',            denaEpic: null, page3: false },
+  'REMATRICULA':               { label: 'Rematricula',               display: 'Rematricula',               denaEpic: null, page3: false },
 };
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
