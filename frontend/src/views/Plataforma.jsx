@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { getPlataforma, getPrioridades, setPrioridade, reorderPrioridades, deletePrioridade } from '../services/api';
+﻿import { useState, useEffect } from 'react';
+import { getPlataforma } from '../services/api';
 
 const JIRA = 'https://cogna.atlassian.net';
 
@@ -216,374 +216,22 @@ function BacklogView({ items }) {
   );
 }
 
-// ── Aba Priorização ────────────────────────────────────────────────────────────
-
-function SearchableSelect({ options, value, onChange, placeholder = 'Selecione o item…' }) {
-  const [search, setSearch] = useState('');
-  const [open,   setOpen]   = useState(false);
-  const ref                  = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const filtered = options.filter(
-    (o) => o.label.toLowerCase().includes(search.toLowerCase()) ||
-           o.value.toLowerCase().includes(search.toLowerCase())
-  );
-  const selected = options.find((o) => o.value === value);
-
-  return (
-    <div ref={ref} className="relative min-w-[340px]">
-      <button type="button" onClick={() => setOpen((o) => !o)}
-        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-sm bg-white dark:bg-gray-800 text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
-        <span className={selected ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}>
-          {selected ? selected.label : placeholder}
-        </span>
-        <span className="text-gray-400 text-xs shrink-0">▾</span>
-      </button>
-      {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl">
-          <div className="p-2 border-b border-gray-100 dark:border-gray-700">
-            <input autoFocus type="text" value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por chave ou título…"
-              className="w-full border border-gray-300 dark:border-gray-600 rounded px-2.5 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-          <ul className="max-h-60 overflow-y-auto py-1">
-            {filtered.length === 0 && (
-              <li className="px-3 py-2 text-sm text-gray-400 dark:text-gray-500">Nenhum resultado</li>
-            )}
-            {filtered.map((o) => (
-              <li key={o.value}
-                onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
-                className={`px-3 py-2 text-sm cursor-pointer hover:bg-primary-50 dark:hover:bg-primary-900/30 ${
-                  o.value === value ? 'bg-primary-50 dark:bg-primary-900/30 font-semibold' : ''
-                }`}>
-                {o.label}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PriorizacaoView({ prios, backlogItems, onRefreshPrios }) {
-  const [addMode,   setAddMode]   = useState(false);
-  const [addForm,   setAddForm]   = useState({ key: '' });
-  const [editKey,   setEditKey]   = useState(null);
-  const [editForm,  setEditForm]  = useState({});
-  const [saving,    setSaving]    = useState(false);
-  const [formError, setFormError] = useState(null);
-  const [dragKey,   setDragKey]   = useState(null);
-  const [dragOver,  setDragOver]  = useState(null);
-
-  const prioritizedKeys = new Set(prios.items.map((i) => i.key));
-  // Só permite priorizar itens que NÃO estão em andamento (cleanup os removeria imediatamente)
-  const unprioritized   = backlogItems.filter((i) => !prioritizedKeys.has(i.key) && i.status !== 'Em Andamento');
-
-  // ── Drag-and-drop ──────────────────────────────────────────────────────────
-  const handleDragStart = (e, key) => {
-    setDragKey(key);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e, key) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (key !== dragOver) setDragOver(key);
-  };
-
-  const handleDragEnd = () => { setDragKey(null); setDragOver(null); };
-
-  const handleDrop = async (e, targetKey) => {
-    e.preventDefault();
-    if (!dragKey || dragKey === targetKey) { handleDragEnd(); return; }
-    setSaving(true); setFormError(null);
-    try {
-      const items    = [...prios.items];
-      const fromIdx  = items.findIndex((i) => i.key === dragKey);
-      const toIdx    = items.findIndex((i) => i.key === targetKey);
-      const [moved]  = items.splice(fromIdx, 1);
-      items.splice(toIdx, 0, moved);
-      await reorderPrioridades(items.map((i) => ({ key: i.key })));
-      await onRefreshPrios();
-    } catch (err) {
-      setFormError(err.response?.data?.error || err.message);
-    } finally {
-      setSaving(false);
-      handleDragEnd();
-    }
-  };
-
-  // ── Adicionar ──────────────────────────────────────────────────────────────
-  const handleAdd = async () => {
-    if (!addForm.key) return;
-    setSaving(true); setFormError(null);
-    try {
-      const bi       = backlogItems.find((i) => i.key === addForm.key);
-      const nextPrio = String(prios.items.length + 1);
-      const payload  = { prioridade: nextPrio, atividade: bi?.summary || addForm.key };
-      console.log('[Priorização] handleAdd → key:', addForm.key, 'payload:', payload);
-      const result = await setPrioridade(addForm.key, payload);
-      console.log('[Priorização] handleAdd → resposta do servidor:', result);
-      setAddMode(false);
-      setAddForm({ key: '' });
-      const refreshed = await onRefreshPrios();
-      console.log('[Priorização] handleAdd → prios após refresh:', refreshed);
-    } catch (e) {
-      console.error('[Priorização] handleAdd → ERRO:', e.response?.data || e.message, e);
-      setFormError(e.response?.data?.error || e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ── Salvar edição ──────────────────────────────────────────────────────────
-  const handleSaveEdit = async (key) => {
-    setSaving(true); setFormError(null);
-    try {
-      const bi      = backlogItems.find((i) => i.key === key);
-      const payload = { prioridade: prios.items.find((i) => i.key === key)?.prioridade || '0', atividade: bi?.summary || key };
-      console.log('[Priorização] handleSaveEdit → key:', key, 'payload:', payload);
-      const result = await setPrioridade(key, payload);
-      console.log('[Priorização] handleSaveEdit → resposta:', result);
-      setEditKey(null);
-      await onRefreshPrios();
-    } catch (e) {
-      console.error('[Priorização] handleSaveEdit → ERRO:', e.response?.data || e.message, e);
-      setFormError(e.response?.data?.error || e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ── Remover ────────────────────────────────────────────────────────────────
-  const handleDelete = async (key) => {
-    if (!window.confirm(`Remover priorização de ${key}?`)) return;
-    setSaving(true); setFormError(null);
-    try {
-      console.log('[Priorização] handleDelete → key:', key);
-      await deletePrioridade(key);
-      console.log('[Priorização] handleDelete → removido com sucesso');
-      await onRefreshPrios();
-    } catch (e) {
-      console.error('[Priorização] handleDelete → ERRO:', e.response?.data || e.message, e);
-      setFormError(e.response?.data?.error || e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const inputCls = 'border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500';
-
-  return (
-    <div className="space-y-4">
-      {/* Erro */}
-      {formError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 flex items-start gap-2">
-          <span className="flex-1">{formError}</span>
-          <button onClick={() => setFormError(null)} className="text-red-400 hover:text-red-600">✕</button>
-        </div>
-      )}
-
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {prios.items.length > 0
-            ? `${prios.items.length} item${prios.items.length !== 1 ? 's' : ''} priorizados · arraste para reordenar`
-            : 'Nenhum item priorizado ainda'}
-        </p>
-        <button
-          onClick={() => { setAddMode((m) => !m); setFormError(null); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
-        >
-          {addMode ? '✕ Cancelar' : '+ Adicionar'}
-        </button>
-      </div>
-
-      {/* Form de adição */}
-      {addMode && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-4 space-y-3">
-          <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Nova priorização</p>
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500">Item (DDPL)</label>
-              <SearchableSelect
-                value={addForm.key}
-                onChange={(val) => setAddForm((f) => ({ ...f, key: val }))}
-                options={unprioritized.map((i) => ({
-                  value: i.key,
-                  label: `${i.key} — ${i.summary.length > 70 ? i.summary.slice(0, 70) + '…' : i.summary}`,
-                }))}
-              />
-            </div>
-            <button onClick={handleAdd} disabled={saving || !addForm.key}
-              className="px-4 py-1.5 text-sm font-medium bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition-colors">
-              {saving ? 'Salvando…' : 'Salvar'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Tabela */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm overflow-x-auto">
-        <table className="w-full text-sm min-w-[700px]">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-800 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
-              <th className="px-3 py-3 w-8"></th>
-              <th className="text-center px-3 py-3 w-16">#</th>
-              <th className="text-left   px-3 py-3 w-28">DDPL</th>
-              <th className="text-left   px-3 py-3">Atividade</th>
-              <th className="text-left   px-3 py-3 w-28">Status</th>
-              <th className="text-left   px-3 py-3">Etiquetas</th>
-              <th className="text-left   px-3 py-3 w-36">Responsável</th>
-              <th className="text-center px-3 py-3 w-24">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {prios.items.map((item, idx) => {
-              const isEditing = editKey === item.key;
-              const bi        = backlogItems.find((i) => i.key === item.key);
-              const isDragging  = dragKey  === item.key;
-              const isDropTarget = dragOver === item.key;
-
-              return (
-                <tr
-                  key={item.key}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, item.key)}
-                  onDragOver={(e)  => handleDragOver(e, item.key)}
-                  onDragEnd={handleDragEnd}
-                  onDrop={(e)      => handleDrop(e, item.key)}
-                  className={`border-t border-gray-100 dark:border-gray-700 transition-all
-                    ${isDragging   ? 'opacity-40 bg-blue-50 dark:bg-blue-900/20' : ''}
-                    ${isDropTarget && !isDragging ? 'border-t-2 border-t-primary-500 bg-primary-50/40 dark:bg-primary-900/20' : ''}
-                    ${!isDragging && !isDropTarget ? 'hover:bg-gray-50 dark:hover:bg-gray-800/60' : ''}
-                  `}
-                >
-                  {/* Handle */}
-                  <td className="px-3 py-3 text-gray-300 dark:text-gray-600 cursor-grab active:cursor-grabbing select-none text-base text-center">
-                    ⠿
-                  </td>
-
-                  {/* Ordem */}
-                  <td className="text-center px-3 py-3">
-                    <span className="text-base font-black text-primary-600 dark:text-primary-400">{idx + 1}</span>
-                  </td>
-
-                  {/* Chave */}
-                  <td className="px-3 py-3">
-                    <a href={`${JIRA}/browse/${item.key}`} target="_blank" rel="noreferrer"
-                       className="font-mono text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline">
-                      {item.key}
-                    </a>
-                  </td>
-
-                  {/* Atividade */}
-                  <td className="px-3 py-3 text-gray-800 dark:text-gray-100 max-w-xs">
-                    <span className="line-clamp-2 text-sm">{bi?.summary || item.atividade}</span>
-                  </td>
-
-                  {/* Status */}
-                  <td className="px-3 py-3">
-                    <StatusBadge status={bi?.status || '—'} />
-                  </td>
-
-                  {/* Etiquetas */}
-                  <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {(bi?.labels || []).length > 0
-                        ? (bi.labels).map((l) => (
-                            <span key={l} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-medium">
-                              {l}
-                            </span>
-                          ))
-                        : <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
-                      }
-                    </div>
-                  </td>
-
-                  {/* Responsável (vem do Jira — assignee) */}
-                  <td className="px-3 py-3">
-                    <span className="text-gray-700 dark:text-gray-300 text-sm">{bi?.assignee || '—'}</span>
-                  </td>
-
-                  {/* Ações */}
-                  <td className="px-3 py-3 text-center">
-                    {isEditing ? (
-                      <div className="flex gap-1 justify-center">
-                        <button onClick={() => handleSaveEdit(item.key)} disabled={saving}
-                          className="text-xs px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg">✓</button>
-                        <button onClick={() => setEditKey(null)}
-                          className="text-xs px-2.5 py-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg">✕</button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-1 justify-center">
-                        <button
-                          onClick={() => { setEditKey(item.key); setEditForm({}); setFormError(null); }}
-                          className="text-xs px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 rounded-lg">
-                          Editar
-                        </button>
-                        <button onClick={() => handleDelete(item.key)} disabled={saving}
-                          className="text-xs px-2.5 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 rounded-lg">
-                          ✕
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-
-            {prios.items.length === 0 && (
-              <tr>
-                <td colSpan={7} className="text-center py-12 text-gray-400 dark:text-gray-600 text-sm">
-                  Nenhum item priorizado. Clique em "+ Adicionar" para começar.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 // ── Componente principal ───────────────────────────────────────────────────────
 
 export default function Plataforma() {
-  const [tab,        setTab]        = useState('priorizacao');
-  const [data,       setData]       = useState(null);
-  const [prios,      setPrios]      = useState({ items: [], byKey: {} });
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState(null);
+  const [tab,          setTab]          = useState('backlog');
+  const [data,         setData]         = useState(null);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState(null);
   const [search,       setSearch]       = useState('');
   const [filterType,   setFilterType]   = useState('');
   const [filterLabel,  setFilterLabel]  = useState('');
 
-  const loadPrios = useCallback(async () => {
-    try {
-      const data = await getPrioridades();
-      console.log('[loadPrios] retornou', data.items?.length, 'itens');
-      setPrios(data);
-      return data;
-    } catch (e) {
-      console.error('[loadPrios] ERRO ao buscar prioridades:', e.response?.data || e.message);
-    }
-  }, []);
-
   const load = () => {
     setLoading(true);
     setError(null);
-    Promise.all([getPlataforma(), getPrioridades()])
-      .then(([d, p]) => { setData(d); setPrios(p); })
+    getPlataforma()
+      .then((d) => setData(d))
       .catch((e) => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
   };
@@ -631,10 +279,6 @@ export default function Plataforma() {
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Total no Backlog</div>
             <div className="text-3xl font-black text-primary-600 dark:text-primary-400">{data.total}</div>
           </div>
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-5 py-3 shadow-sm">
-            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Priorizados</div>
-            <div className="text-3xl font-black text-green-600 dark:text-green-400">{prios.items.length}</div>
-          </div>
           {Object.entries(data.por_tipo).sort((a, b) => b[1] - a[1]).map(([tipo, qtd]) => {
             const s = TYPE_STYLE[tipo] || { icon: '📄', bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-300' };
             return (
@@ -650,7 +294,6 @@ export default function Plataforma() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
         {[
-          { id: 'priorizacao',  label: 'Priorização',  badge: prios.items.length || null },
           { id: 'backlog',      label: 'Backlog' },
           { id: 'em-andamento', label: 'Em Andamento', badge: allItems.filter(i => i.status === 'Em Andamento').length || null },
           { id: 'bloqueadas',   label: 'Bloqueadas',   badge: allItems.filter(i => ['Bloqueado', 'Blocked', 'Impedido'].includes(i.status)).length || null },
@@ -731,13 +374,6 @@ export default function Plataforma() {
         <BacklogView items={allItems.filter(i => ['Bloqueado', 'Blocked', 'Impedido'].includes(i.status))} />
       )}
 
-      {!loading && tab === 'priorizacao' && (
-        <PriorizacaoView
-          prios={prios}
-          backlogItems={allItems}
-          onRefreshPrios={loadPrios}
-        />
-      )}
     </div>
   );
 }
