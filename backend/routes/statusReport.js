@@ -406,6 +406,28 @@ function serializeIncident(inc) {
   };
 }
 
+// ── Route: GET /api/status-report-debug ──────────────────────────────────────
+
+router.get('/status-report-debug', async (req, res) => {
+  try {
+    const label = req.query.label || 'NFT+Campanhas+Faturamento';
+    const project = req.query.project || 'DDRE';
+    const jql = `project = ${project} AND labels = "${label}" ORDER BY key ASC`;
+    const jql2 = `project = ${project} ORDER BY key ASC`;
+    const [withLabel, all] = await Promise.all([
+      fetchAll(jql, ['summary','status','issuetype','labels'], 10).catch(e => ({ error: e.response?.data || e.message })),
+      fetchAll(jql2, ['summary','status','issuetype','labels'], 5).catch(e => ({ error: e.response?.data || e.message })),
+    ]);
+    res.json({
+      jql_used: jql,
+      with_label: Array.isArray(withLabel) ? withLabel.map(i => ({ key: i.key, status: i.fields?.status?.name, issuetype: i.fields?.issuetype?.name, labels: i.fields?.labels })) : withLabel,
+      sample_all: Array.isArray(all) ? all.map(i => ({ key: i.key, issuetype: i.fields?.issuetype?.name, labels: i.fields?.labels })) : all,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Route: GET /api/status-report ─────────────────────────────────────────────
 
 router.get('/status-report', async (req, res) => {
