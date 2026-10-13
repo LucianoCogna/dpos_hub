@@ -183,7 +183,13 @@ function mapDaplItem(issue) {
   let sprint = null;
   if (latestSprint) {
     let nm = latestSprint.name || '';
-    if (nm.startsWith('SP ')) nm = nm.slice(3);
+    if (nm.startsWith('SP ')) {
+      nm = nm.slice(3);
+    } else {
+      // Extrai identificador estilo "26.X.Y" do nome (ex: "[DDRE] Sprint 1 - 26.4.1")
+      const m = nm.match(/(\d{2}\.\d+\.\d+)/);
+      if (m) nm = m[1];
+    }
     sprint = nm;
   }
   const sprints_count = allSprints.length;
