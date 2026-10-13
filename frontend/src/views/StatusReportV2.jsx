@@ -42,17 +42,49 @@ const JIRA  = 'https://cogna.atlassian.net';
 const TEAMS = {
   'produto-dados': {
     label: 'Produto de Dados',
+    icon: '📊',
+    desc: 'DAPL · G&C, Revenue, DMC e outros',
     areas: ['G&C','CAPTACAO_ANALITICA','REVENUE','ROTINAS_FINANCEIRAS','DMC','REVENUE_STRATEGY','RVV','REPASSE','ALIANCA_1_SOMOS','ALIANCA_1_SABER','Plurall','MACROPROCESSO','ESG','VOOMP'],
     defaultArea: 'G&C',
     areaLabels: null,
   },
   'revenue-office': {
     label: 'Revenue Office',
+    icon: '💼',
+    desc: 'DDRE · NFT+Campanhas, Rentabilização, Rematricula',
     areas: ['NFT_CAMPANHAS_FATURAMENTO','RENTABILIZACAO','REMATRICULA'],
     defaultArea: 'NFT_CAMPANHAS_FATURAMENTO',
     areaLabels: { NFT_CAMPANHAS_FATURAMENTO: 'NFT+Campanhas+Faturamento', RENTABILIZACAO: 'Rentabilização', REMATRICULA: 'Rematricula' },
   },
 };
+
+// ── Modal de seleção de time ──────────────────────────────────────────────────
+function TeamModal({ onSelect }) {
+  return (
+    <>
+      <div style={{ position:'fixed',inset:0,background:'rgba(10,5,30,.55)',zIndex:1000 }} />
+      <div style={{ position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',width:'min(560px,94vw)',background:'#fff',borderRadius:20,boxShadow:'0 24px 64px rgba(0,0,0,.25)',zIndex:1001,overflow:'hidden' }}>
+        <div style={{ padding:'24px 28px 16px' }}>
+          <h2 style={{ margin:0,fontSize:20,fontWeight:800,color:'#1a1a2e' }}>Status Report</h2>
+          <p style={{ margin:'6px 0 0',fontSize:13,color:'#888' }}>Selecione o time para visualizar o relatório</p>
+        </div>
+        <div style={{ padding:'8px 28px 28px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:12 }}>
+          {Object.entries(TEAMS).map(([key, t]) => (
+            <button key={key} onClick={() => onSelect(key)}
+              style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:8,padding:'28px 16px',background:'#FAFAFA',border:'1.5px solid #e8e0f8',borderRadius:14,cursor:'pointer',transition:'all .15s',fontFamily:'inherit' }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor='#5521B5'; e.currentTarget.style.background='#F3EEF8'; e.currentTarget.style.transform='translateY(-2px)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor='#e8e0f8'; e.currentTarget.style.background='#FAFAFA'; e.currentTarget.style.transform='translateY(0)'; }}
+            >
+              <span style={{ fontSize:34 }}>{t.icon}</span>
+              <span style={{ fontSize:14,fontWeight:800,color:'#1a1a2e',textAlign:'center' }}>{t.label}</span>
+              <span style={{ fontSize:11,color:'#888',textAlign:'center',lineHeight:1.4 }}>{t.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -1102,7 +1134,7 @@ export default function StatusReportV2() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // State sincronizado com URL
-  const [team,    setTeamState]   = useState(searchParams.get('team')   || 'produto-dados');
+  const [team,    setTeamState]   = useState(searchParams.get('team')   || null);
   const [area,    setAreaState]   = useState(searchParams.get('area')   || 'G&C');
   const [sprint,  setSprintState] = useState(searchParams.get('sprint') || '');
 
@@ -1120,6 +1152,13 @@ export default function StatusReportV2() {
 
   // Sync state → URL
   const setTeam = (v) => {
+    if (!v) {
+      setTeamState(null);
+      setAreaState('G&C');
+      setData(null);
+      setSearchParams((p) => { p.delete('team'); p.delete('area'); p.delete('sprint'); return p; });
+      return;
+    }
     const newDefault = TEAMS[v]?.defaultArea || 'G&C';
     setTeamState(v);
     setAreaState(newDefault);
@@ -1141,7 +1180,7 @@ export default function StatusReportV2() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(area, sprint, team); }, [area, sprint, team]);
+  useEffect(() => { if (team) load(area, sprint, team); }, [area, sprint, team]);
 
   const copyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -1295,6 +1334,9 @@ export default function StatusReportV2() {
         <PresentationMode slides={buildSlides()} onExit={() => setPresentation(false)} />
       )}
 
+      {/* Modal de seleção de time */}
+      {!team && <TeamModal onSelect={setTeam} />}
+
       {/* Toast */}
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
 
@@ -1309,14 +1351,12 @@ export default function StatusReportV2() {
 
         <div style={{ flex:1 }} />
 
-        {/* Team selector */}
-        <div style={{ display:'flex',gap:4,background:T.surfaceSol,border:`1.5px solid ${T.border}`,borderRadius:11,padding:4,boxShadow:T.shadow }}>
-          {Object.entries(TEAMS).map(([k,v]) => (
-            <button key={k} onClick={() => setTeam(k)} style={{ background:team===k?`linear-gradient(135deg,${T.purple},${T.purpleMid})`:'transparent',color:team===k?T.white:T.textMut,border:'none',borderRadius:8,padding:'6px 14px',fontSize:12,fontWeight:700,cursor:'pointer',transition:'all .2s',whiteSpace:'nowrap' }}>
-              {v.label}
-            </button>
-          ))}
-        </div>
+        {/* Chip do time selecionado */}
+        <button onClick={() => setTeam(null)} title="Trocar time" style={{ display:'flex',alignItems:'center',gap:6,background:T.surfaceSol,color:T.textPrim,border:`1.5px solid ${T.border}`,borderRadius:11,padding:'7px 14px',fontSize:12,fontWeight:700,cursor:'pointer',boxShadow:T.shadow,whiteSpace:'nowrap' }}>
+          <span>{TEAMS[team]?.icon}</span>
+          <span>{TEAMS[team]?.label}</span>
+          <span style={{ color:T.textMut,fontSize:11 }}>✕</span>
+        </button>
 
         {/* Area */}
         <select value={area} onChange={(e) => setArea(e.target.value)} style={{ background:T.surfaceSol,color:T.textPrim,border:`1.5px solid ${T.border}`,borderRadius:11,padding:'9px 14px',fontSize:13,outline:'none',cursor:'pointer',boxShadow:T.shadow }}>
