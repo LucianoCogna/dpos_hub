@@ -44,7 +44,7 @@ const SIZE_MAP = {
   'size-Epic': { up: 1, dn: null }, // TBD
 };
 
-// ── Área config ───────────────────────────────────────────────────────────────
+// ── Área config — Produto de Dados (DAPL) ────────────────────────────────────
 
 const AREA_CONFIG = {
   'G&C':                 { label: 'G&C',                denaEpic: 'DENA-747',  page3: true  },
@@ -61,6 +61,14 @@ const AREA_CONFIG = {
   'MACROPROCESSO':       { label: 'MACROPROCESSO',       denaEpic: null,        page3: false },
   'ESG':                 { label: 'ESG',                 denaEpic: null,        page3: false },
   'VOOMP':               { label: 'VOOMP',               denaEpic: null,        page3: false },
+};
+
+// ── Área config — Revenue Office (DDRE) ──────────────────────────────────────
+
+const DDRE_AREA_CONFIG = {
+  'NFT_CAMPANHAS_FATURAMENTO': { labels: ['NFT', 'Campanhas', 'Faturamento'], display: 'NFT+Campanhas+Faturamento', denaEpic: null, page3: false },
+  'RENTABILIZACAO':            { labels: ['Rentabilização'],                  display: 'Rentabilização',            denaEpic: null, page3: false },
+  'REMATRICULA':               { labels: ['Rematricula'],                     display: 'Rematricula',               denaEpic: null, page3: false },
 };
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
@@ -402,9 +410,14 @@ function serializeIncident(inc) {
 
 router.get('/status-report', async (req, res) => {
   try {
-    const areaKey = req.query.area || 'G&C';
-    const config  = AREA_CONFIG[areaKey];
+    const teamKey     = req.query.team || 'produto-dados';
+    const isRevOffice = teamKey === 'revenue-office';
+    const configMap   = isRevOffice ? DDRE_AREA_CONFIG : AREA_CONFIG;
+    const defaultArea = isRevOffice ? 'NFT_CAMPANHAS_FATURAMENTO' : 'G&C';
+    const areaKey     = req.query.area || defaultArea;
+    const config      = configMap[areaKey];
     if (!config) return res.status(400).json({ error: `Área inválida: ${areaKey}` });
+    const projectKey  = isRevOffice ? 'DDRE' : 'DAPL';
 
     const today         = new Date();
     const sprintOverride = req.query.sprint;
@@ -416,12 +429,15 @@ router.get('/status-report', async (req, res) => {
     // Apenas Histórias do projeto DAPL — épicos nunca são exibidos, parent vem via campo "parent"
     let storyIssues = [];
     try {
+      const labelFilter = config.labels
+        ? `labels in (${config.labels.map((l) => `"${l}"`).join(', ')})`
+        : `labels = "${config.label}"`;
       storyIssues = await fetchAll(
-        `project = DAPL AND labels = "${config.label}" AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`,
+        `project = ${projectKey} AND ${labelFilter} AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`,
         DAPL_FIELDS
       );
     } catch (e) {
-      console.error(`[status-report] ERRO ao buscar DAPLs do Jira (${areaKey}):`, e.response?.data || e.message);
+      console.error(`[status-report] ERRO ao buscar issues do Jira (${projectKey}/${areaKey}):`, e.response?.data || e.message);
     }
     const items = storyIssues.map(mapDaplItem);
 

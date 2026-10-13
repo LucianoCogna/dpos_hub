@@ -39,11 +39,20 @@ const T = {
 };
 
 const JIRA  = 'https://cogna.atlassian.net';
-const AREAS = [
-  'G&C','CAPTACAO_ANALITICA','REVENUE','ROTINAS_FINANCEIRAS',
-  'DMC','REVENUE_STRATEGY','RVV','REPASSE',
-  'ALIANCA_1_SOMOS','ALIANCA_1_SABER','Plurall','MACROPROCESSO','ESG','VOOMP',
-];
+const TEAMS = {
+  'produto-dados': {
+    label: 'Produto de Dados',
+    areas: ['G&C','CAPTACAO_ANALITICA','REVENUE','ROTINAS_FINANCEIRAS','DMC','REVENUE_STRATEGY','RVV','REPASSE','ALIANCA_1_SOMOS','ALIANCA_1_SABER','Plurall','MACROPROCESSO','ESG','VOOMP'],
+    defaultArea: 'G&C',
+    areaLabels: null,
+  },
+  'revenue-office': {
+    label: 'Revenue Office',
+    areas: ['NFT_CAMPANHAS_FATURAMENTO','RENTABILIZACAO','REMATRICULA'],
+    defaultArea: 'NFT_CAMPANHAS_FATURAMENTO',
+    areaLabels: { NFT_CAMPANHAS_FATURAMENTO: 'NFT+Campanhas+Faturamento', RENTABILIZACAO: 'Rentabilização', REMATRICULA: 'Rematricula' },
+  },
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -1093,6 +1102,7 @@ export default function StatusReportV2() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // State sincronizado com URL
+  const [team,    setTeamState]   = useState(searchParams.get('team')   || 'produto-dados');
   const [area,    setAreaState]   = useState(searchParams.get('area')   || 'G&C');
   const [sprint,  setSprintState] = useState(searchParams.get('sprint') || '');
 
@@ -1109,23 +1119,29 @@ export default function StatusReportV2() {
   const pdfRef    = useRef(null);
 
   // Sync state → URL
+  const setTeam = (v) => {
+    const newDefault = TEAMS[v]?.defaultArea || 'G&C';
+    setTeamState(v);
+    setAreaState(newDefault);
+    setSearchParams((p) => { p.set('team', v); p.set('area', newDefault); p.delete('sprint'); return p; });
+  };
   const setArea = (v) => {
     setAreaState(v);
-    setSearchParams((p) => { p.set('area', v); if (sprint) p.set('sprint', sprint); else p.delete('sprint'); return p; });
+    setSearchParams((p) => { p.set('team', team); p.set('area', v); if (sprint) p.set('sprint', sprint); else p.delete('sprint'); return p; });
   };
   const setSprint = (v) => {
     setSprintState(v);
-    setSearchParams((p) => { p.set('area', area); if (v) p.set('sprint', v); else p.delete('sprint'); return p; });
+    setSearchParams((p) => { p.set('team', team); p.set('area', area); if (v) p.set('sprint', v); else p.delete('sprint'); return p; });
   };
 
-  const load = useCallback(async (a, s) => {
+  const load = useCallback(async (a, s, t) => {
     setLoading(true); setError(null); setData(null);
-    try { setData(await getStatusReport(a, s||null)); }
+    try { setData(await getStatusReport(a, s||null, t||'produto-dados')); }
     catch (e) { setError(e.response?.data?.error || e.message || 'Erro ao carregar'); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(area, sprint); }, [area, sprint]);
+  useEffect(() => { load(area, sprint, team); }, [area, sprint, team]);
 
   const copyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -1293,9 +1309,20 @@ export default function StatusReportV2() {
 
         <div style={{ flex:1 }} />
 
+        {/* Team selector */}
+        <div style={{ display:'flex',gap:4,background:T.surfaceSol,border:`1.5px solid ${T.border}`,borderRadius:11,padding:4,boxShadow:T.shadow }}>
+          {Object.entries(TEAMS).map(([k,v]) => (
+            <button key={k} onClick={() => setTeam(k)} style={{ background:team===k?`linear-gradient(135deg,${T.purple},${T.purpleMid})`:'transparent',color:team===k?T.white:T.textMut,border:'none',borderRadius:8,padding:'6px 14px',fontSize:12,fontWeight:700,cursor:'pointer',transition:'all .2s',whiteSpace:'nowrap' }}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+
         {/* Area */}
         <select value={area} onChange={(e) => setArea(e.target.value)} style={{ background:T.surfaceSol,color:T.textPrim,border:`1.5px solid ${T.border}`,borderRadius:11,padding:'9px 14px',fontSize:13,outline:'none',cursor:'pointer',boxShadow:T.shadow }}>
-          {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+          {(TEAMS[team]?.areas || []).map((a) => (
+            <option key={a} value={a}>{TEAMS[team]?.areaLabels?.[a] || a}</option>
+          ))}
         </select>
 
         {/* Sprint selector */}
@@ -1309,7 +1336,7 @@ export default function StatusReportV2() {
         )}
 
         {/* Atualizar */}
-        <button onClick={() => load(area,sprint)} disabled={loading} style={{ background:`linear-gradient(135deg,${T.purple},${T.purpleMid})`,color:T.white,border:'none',borderRadius:11,padding:'9px 16px',fontSize:13,fontWeight:700,cursor:loading?'not-allowed':'pointer',boxShadow:`0 4px 16px ${T.purpleGlow}`,opacity:loading?.7:1,display:'flex',alignItems:'center',gap:6 }}>
+        <button onClick={() => load(area,sprint,team)} disabled={loading} style={{ background:`linear-gradient(135deg,${T.purple},${T.purpleMid})`,color:T.white,border:'none',borderRadius:11,padding:'9px 16px',fontSize:13,fontWeight:700,cursor:loading?'not-allowed':'pointer',boxShadow:`0 4px 16px ${T.purpleGlow}`,opacity:loading?.7:1,display:'flex',alignItems:'center',gap:6 }}>
           <span className={loading?'sr2-spin':''} style={{ display:'inline-block' }}>🔄</span>
           {loading?'Carregando…':'Atualizar'}
         </button>

@@ -53,8 +53,8 @@ export const getIssueTransitions = (key) => api.get(`/jira/issue/${key}/transiti
 export const updateIssue         = (key, data) => api.put(`/jira/issue/${key}/update`, data).then((r) => r.data);
 
 // Status Report (PDF-style)
-export const getStatusReport = (area = 'G&C', sprint = null) => {
-  const params = new URLSearchParams({ area });
+export const getStatusReport = (area = 'G&C', sprint = null, team = 'produto-dados') => {
+  const params = new URLSearchParams({ area, team });
   if (sprint) params.set('sprint', sprint);
   return api.get(`/status-report?${params}`).then((r) => r.data);
 };
