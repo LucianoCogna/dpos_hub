@@ -15,7 +15,7 @@ const BOARDS = {
 
 const SP_FIELD   = 'customfield_10026';
 const DONE_CAT   = 'done';
-const SPRINT_QTY = 6; // sprints fechadas para histórico
+const SPRINT_QTY = 9; // sprints fechadas para histórico
 
 // tipos que pontuam SP
 const SP_TYPES = new Set(['História', 'Story', 'Enabler', 'Spike', 'Débito Técnico', 'Bug', 'Feature']);
@@ -128,6 +128,8 @@ async function buildProjectData(projKey, cfg) {
   const activeSprint = sprintResults.find(s => s.state === 'active') || null;
   const burndown = activeSprint ? {
     sprint:       activeSprint.name,
+    start:        activeSprint.start,
+    end:          activeSprint.end,
     total:        activeSprint.total,
     done:         activeSprint.done,
     remaining:    activeSprint.total - activeSprint.done,
