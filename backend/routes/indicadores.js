@@ -9,7 +9,7 @@ function getHeaders() {
 
 const BOARDS = {
   CRPR: { name: 'Pricing',  boardId: 8075 },
-  CRVE: { name: 'Rewired',  boardId: 8145 },
+  CRVE: { name: 'Vendas',   boardId: 8145 },
   CRMI: { name: 'Mídia',    boardId: 8143 },
 };
 

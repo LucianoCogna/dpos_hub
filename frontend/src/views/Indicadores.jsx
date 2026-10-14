@@ -210,46 +210,6 @@ function BurndownByType({ burndown, color }) {
   );
 }
 
-// ── Tabela de contribuição ────────────────────────────────────────────────────
-function ContributorsTable({ contributors, color }) {
-  if (!contributors?.length) return <div style={{ color: '#bbb', fontSize: 13 }}>Sem dados.</div>;
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr style={{ borderBottom: '2px solid #f0e8ff' }}>
-            {['Desenvolvedor', 'Total', 'Concluídos', '% Contrib.', 'Sprint ativa'].map(h => (
-              <th key={h} style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#888', textAlign: h === 'Desenvolvedor' ? 'left' : 'center', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '.04em' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {contributors.map((c, i) => (
-            <tr key={c.name} style={{ background: i % 2 === 0 ? '#fafafa' : '#fff', borderBottom: '1px solid #f5f0ff' }}>
-              <td style={{ padding: '8px 10px', fontWeight: 600, color: '#1a1a2e' }}>{c.name}</td>
-              <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700, color: '#333' }}>{c.total}</td>
-              <td style={{ padding: '8px 10px', textAlign: 'center', color: '#10b981', fontWeight: 700 }}>{c.done}</td>
-              <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
-                  <div style={{ height: 6, width: 56, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${c.pct * 100}%`, background: color, borderRadius: 99 }} />
-                  </div>
-                  <span style={{ fontSize: 11, color: '#888', minWidth: 30 }}>{pct(c.pct)}</span>
-                </div>
-              </td>
-              <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                {c.active
-                  ? <span style={{ background: '#E8F5E9', color: '#2E7D32', borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>✓ Sim</span>
-                  : <span style={{ background: '#f5f5f5', color: '#aaa', borderRadius: 99, padding: '2px 10px', fontSize: 11 }}>Não</span>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 // ── Aba de projeto ────────────────────────────────────────────────────────────
 function ProjectTab({ projKey, data }) {
   const { color } = PROJ[projKey];
@@ -345,14 +305,6 @@ function ProjectTab({ projKey, data }) {
         <Card title="" color={color}>
           <BurndownLineChart burndown={data.burndown} color={color} />
           {data.burndown && <BurndownByType burndown={data.burndown} color={color} />}
-        </Card>
-      </div>
-
-      {/* Contribuição */}
-      <div>
-        <SectionTitle label="Contribuição por Desenvolvedor" color={color} />
-        <Card title={`ÚLTIMAS ${data.sprints?.length || 0} SPRINTS`} color={color}>
-          <ContributorsTable contributors={data.contributors} color={color} />
         </Card>
       </div>
 
