@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, Cell,
+  Tooltip, ResponsiveContainer, Legend, Cell, LabelList,
 } from 'recharts';
 import { getIndicadores } from '../services/api';
 
@@ -58,24 +58,116 @@ function Card({ title, color, children, span }) {
   );
 }
 
-// ── Burndown bar ─────────────────────────────────────────────────────────────
-function BurndownBar({ burndown, color }) {
+// ── Burndown completo (progresso + gráfico por tipo + por pessoa) ─────────────
+function BurndownSection({ burndown, color }) {
   if (!burndown) return <div style={{ color: '#bbb', fontSize: 13 }}>Sem sprint ativa.</div>;
-  const { total, done, remaining } = burndown;
+  const { total, done, remaining, by_type = {}, by_type_done = {}, by_assignee = {} } = burndown;
   const pctDone = total > 0 ? done / total : 0;
+
+  // dados por tipo: ordena por total desc, filtra tipos com 0
+  const typeData = Object.entries(by_type)
+    .map(([tipo, tot]) => ({
+      tipo,
+      Concluídos: by_type_done[tipo] || 0,
+      Restantes:  tot - (by_type_done[tipo] || 0),
+    }))
+    .filter(d => d.Concluídos + d.Restantes > 0)
+    .sort((a, b) => (b.Concluídos + b.Restantes) - (a.Concluídos + a.Restantes));
+
+  // dados por pessoa (apenas com itens na sprint ativa)
+  const personData = Object.entries(by_assignee)
+    .map(([nome, c]) => ({
+      nome: nome.split(' ')[0], // só primeiro nome para caber
+      nomeCompleto: nome,
+      Concluídos: c.done,
+      Restantes:  c.total - c.done,
+    }))
+    .filter(d => d.Concluídos + d.Restantes > 0)
+    .sort((a, b) => (b.Concluídos + b.Restantes) - (a.Concluídos + a.Restantes));
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#888', marginBottom: 8 }}>
-        <strong style={{ color: '#1a1a2e' }}>{burndown.sprint}</strong>
-        <span>{done} / {total} concluídos ({pct(pctDone)})</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Barra de progresso geral */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#888', marginBottom: 8 }}>
+          <strong style={{ color: '#1a1a2e', fontSize: 13 }}>{burndown.sprint}</strong>
+          <span>{done} / {total} concluídos ({pct(pctDone)})</span>
+        </div>
+        <div style={{ height: 10, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${pctDone * 100}%`, background: color, borderRadius: 99, transition: 'width .5s' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
+          <span style={{ color: '#10b981', fontWeight: 600 }}>✓ {done} concluídos</span>
+          <span style={{ color: '#f59e0b', fontWeight: 600 }}>↻ {remaining} restantes</span>
+        </div>
       </div>
-      <div style={{ height: 10, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pctDone * 100}%`, background: color, borderRadius: 99, transition: 'width .5s' }} />
-      </div>
-      <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
-        <span style={{ color: '#10b981', fontWeight: 600 }}>✓ {done} concluídos</span>
-        <span style={{ color: '#f59e0b', fontWeight: 600 }}>↻ {remaining} restantes</span>
-      </div>
+
+      {/* Gráficos lado a lado */}
+      {(typeData.length > 0 || personData.length > 0) && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px,1fr))', gap: 14 }}>
+
+          {/* Por tipo */}
+          {typeData.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>
+                Por Tipo de Item
+              </div>
+              <ResponsiveContainer width="100%" height={Math.max(120, typeData.length * 32)}>
+                <BarChart data={typeData} layout="vertical" margin={{ top: 0, right: 30, bottom: 0, left: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="tipo" tick={{ fontSize: 10 }} width={90} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Bar dataKey="Concluídos" stackId="a" fill={color} radius={[0,0,0,0]} />
+                  <Bar dataKey="Restantes"  stackId="a" fill="#e5e7eb" radius={[0,3,3,0]}>
+                    <LabelList dataKey="Restantes" position="right" style={{ fontSize: 10, fill: '#999' }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Por pessoa */}
+          {personData.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>
+                Por Desenvolvedor
+              </div>
+              <ResponsiveContainer width="100%" height={Math.max(120, personData.length * 32)}>
+                <BarChart data={personData} layout="vertical" margin={{ top: 0, right: 30, bottom: 0, left: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={70} />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const row = personData.find(p => p.nome === label);
+                      return (
+                        <div style={{ background: '#1a1a2e', color: '#f9fafb', borderRadius: 10, padding: '10px 14px', fontSize: 12 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 4 }}>{row?.nomeCompleto || label}</div>
+                          {payload.map(p => (
+                            <div key={p.name} style={{ color: p.fill === '#e5e7eb' ? '#aaa' : color }}>
+                              {p.name}: <strong>{p.value}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Bar dataKey="Concluídos" stackId="a" fill={color} />
+                  <Bar dataKey="Restantes"  stackId="a" fill="#e5e7eb" radius={[0,3,3,0]}>
+                    <LabelList dataKey="Restantes" position="right" style={{ fontSize: 10, fill: '#999' }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+        </div>
+      )}
     </div>
   );
 }
@@ -246,7 +338,7 @@ function ProjectTab({ projKey, data }) {
       <div>
         <SectionTitle label="Burndown — Sprint Ativa" color={color} />
         <Card title="" color={color}>
-          <BurndownBar burndown={data.burndown} color={color} />
+          <BurndownSection burndown={data.burndown} color={color} />
         </Card>
       </div>
 
@@ -333,10 +425,10 @@ function ConsolidadoTab({ data }) {
       {/* Burndown por squad */}
       <div>
         <SectionTitle label="Burndown — Sprint Ativa" color="#374151" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px,1fr))', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {PROJ_ORDER.map(k => (
             <Card key={k} title={PROJ[k].name.toUpperCase()} color={PROJ[k].color}>
-              <BurndownBar burndown={data[k]?.burndown} color={PROJ[k].color} />
+              <BurndownSection burndown={data[k]?.burndown} color={PROJ[k].color} />
             </Card>
           ))}
         </div>

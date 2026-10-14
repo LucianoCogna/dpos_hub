@@ -62,6 +62,7 @@ async function getSprintIssues(boardId, sprintId) {
 function analyzeIssues(issues) {
   let total = 0, done = 0, spTotal = 0, spDone = 0;
   const byType     = {};
+  const byTypeDone = {};
   const byAssignee = {};
 
   for (const issue of issues) {
@@ -81,6 +82,9 @@ function analyzeIssues(issues) {
     }
 
     byType[type] = (byType[type] || 0) + 1;
+    if (!byTypeDone[type]) byTypeDone[type] = 0;
+    if (isDone) byTypeDone[type]++;
+
     if (!byAssignee[assignee]) byAssignee[assignee] = { total: 0, done: 0 };
     byAssignee[assignee].total++;
     if (isDone) byAssignee[assignee].done++;
@@ -94,6 +98,7 @@ function analyzeIssues(issues) {
     sp_done:          spDone,
     completion_rate:  total > 0 ? +(done / total).toFixed(3) : 0,
     by_type:          byType,
+    by_type_done:     byTypeDone,
     by_assignee:      byAssignee,
   };
 }
@@ -122,11 +127,13 @@ async function buildProjectData(projKey, cfg) {
   // burndown da sprint ativa
   const activeSprint = sprintResults.find(s => s.state === 'active') || null;
   const burndown = activeSprint ? {
-    sprint:      activeSprint.name,
-    total:       activeSprint.total,
-    done:        activeSprint.done,
-    remaining:   activeSprint.total - activeSprint.done,
-    by_type:     activeSprint.by_type,
+    sprint:       activeSprint.name,
+    total:        activeSprint.total,
+    done:         activeSprint.done,
+    remaining:    activeSprint.total - activeSprint.done,
+    by_type:      activeSprint.by_type,
+    by_type_done: activeSprint.by_type_done,
+    by_assignee:  activeSprint.by_assignee,
   } : null;
 
   // contribuição por dev agregando todas as sprints coletadas
