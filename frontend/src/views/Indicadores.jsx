@@ -1,356 +1,383 @@
 import { useState, useEffect } from 'react';
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, Cell,
+} from 'recharts';
 import { getIndicadores } from '../services/api';
 
-const JIRA = 'https://cogna.atlassian.net';
-
-// ── Cores por status ──────────────────────────────────────────────────────────
-const STATUS_CFG = {
-  'Backlog':       { bg: 'bg-gray-100 dark:bg-gray-700',     text: 'text-gray-600 dark:text-gray-300'   },
-  'Em Andamento':  { bg: 'bg-blue-100 dark:bg-blue-900/40',  text: 'text-blue-700 dark:text-blue-300'   },
-  'In Progress':   { bg: 'bg-blue-100 dark:bg-blue-900/40',  text: 'text-blue-700 dark:text-blue-300'   },
-  'Homologação':   { bg: 'bg-amber-100 dark:bg-amber-900/40',text: 'text-amber-700 dark:text-amber-300' },
-  'Code Review':   { bg: 'bg-violet-100 dark:bg-violet-900/40', text: 'text-violet-700 dark:text-violet-300' },
-  'Concluído':     { bg: 'bg-green-100 dark:bg-green-900/40',text: 'text-green-700 dark:text-green-300' },
-  'Done':          { bg: 'bg-green-100 dark:bg-green-900/40',text: 'text-green-700 dark:text-green-300' },
-  'Aceito':        { bg: 'bg-green-100 dark:bg-green-900/40',text: 'text-green-700 dark:text-green-300' },
-  'Bloqueado':     { bg: 'bg-red-100 dark:bg-red-900/40',    text: 'text-red-700 dark:text-red-300'     },
+// ── Config de projeto ─────────────────────────────────────────────────────────
+const PROJ = {
+  CRPR: { name: 'Pricing',  color: '#8b5cf6', light: '#ede9fe' },
+  CRVE: { name: 'Rewired',  color: '#10b981', light: '#d1fae5' },
+  CRMI: { name: 'Mídia',    color: '#0ea5e9', light: '#e0f2fe' },
 };
-
-// Cores de acento por projeto
-const PROJ_ACCENT = {
-  CRPR: { bar: 'bg-violet-500', badge: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300', dot: 'bg-violet-500' },
-  CRMI: { bar: 'bg-sky-500',    badge: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300',             dot: 'bg-sky-500'    },
-  CRVE: { bar: 'bg-emerald-500',badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
-};
-
-const PRIORITY_DOT = {
-  Highest: 'bg-red-500', High: 'bg-red-400', Medium: 'bg-amber-400', Low: 'bg-green-400', Lowest: 'bg-green-300',
-};
+const PROJ_ORDER = ['CRPR', 'CRVE', 'CRMI'];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function StatusBadge({ status }) {
-  const s = STATUS_CFG[status] || { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-500 dark:text-gray-400' };
-  return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${s.bg} ${s.text}`}>
-      {status}
-    </span>
-  );
-}
-
-function fmtDate(iso) {
+const pct = (v) => `${(v * 100).toFixed(0)}%`;
+const shortSprint = (name = '') => {
+  const m = name.match(/\d{2}\.\d+\.\d+/);
+  return m ? m[0] : name.split(' ').slice(-1)[0];
+};
+const fmtDate = (iso) => {
   if (!iso) return '—';
   const [y, m, d] = iso.slice(0, 10).split('-');
   return `${d}/${m}/${String(y).slice(2)}`;
-}
+};
 
-// ── Linha de issue ────────────────────────────────────────────────────────────
-
-function IssueRow({ item }) {
-  const dot = PRIORITY_DOT[item.priority] || PRIORITY_DOT.Medium;
+// ── KPI Card ─────────────────────────────────────────────────────────────────
+function KpiCard({ label, value, sub, color = '#8b5cf6' }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 border-b border-gray-100 dark:border-gray-700/50 last:border-0 transition-colors group">
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} title={item.priority} />
-
-      <a
-        href={`${JIRA}/browse/${item.key}`}
-        target="_blank"
-        rel="noreferrer"
-        className="font-mono text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline flex-shrink-0 w-24"
-      >
-        {item.key}
-      </a>
-
-      <span className="flex-1 text-sm text-gray-800 dark:text-gray-100 truncate" title={item.summary}>
-        {item.summary}
-      </span>
-
-      <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 hidden sm:block tabular-nums">
-        {fmtDate(item.updated)}
-      </span>
-
-      <StatusBadge status={item.status} />
+    <div style={{ background:'#fff', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'16px 20px', minWidth:130, flex:1 }}>
+      <div style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:32, fontWeight:900, color, lineHeight:1 }}>{value}</div>
+      {sub && <div style={{ fontSize:12, color:'#9ca3af', marginTop:4 }}>{sub}</div>}
     </div>
   );
 }
 
-// ── Card de engenheiro ────────────────────────────────────────────────────────
-
-function EngineerCard({ name, issues, projKey }) {
-  const [open, setOpen] = useState(true);
-  const accent = PROJ_ACCENT[projKey] || PROJ_ACCENT.CRPR;
-
-  const statusCount = issues.reduce((acc, i) => {
-    acc[i.status] = (acc[i.status] || 0) + 1;
-    return acc;
-  }, {});
-
-  const done = issues.filter((i) =>
-    ['Concluído', 'Done', 'Aceito'].includes(i.status)
-  ).length;
-
+// ── Burndown bar ─────────────────────────────────────────────────────────────
+function BurndownBar({ burndown, color }) {
+  if (!burndown) return <div style={{ color:'#9ca3af', fontSize:13 }}>Sem sprint ativa.</div>;
+  const { total, done, remaining } = burndown;
+  const pctDone = total > 0 ? done / total : 0;
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-800 text-left transition-colors"
-      >
-        <span className="text-base">👤</span>
-        <span className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex-1">{name}</span>
-
-        {/* Mini status pills */}
-        <div className="hidden sm:flex items-center gap-1.5 mr-2">
-          {Object.entries(statusCount).slice(0, 4).map(([s, n]) => (
-            <span key={s} className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${(STATUS_CFG[s] || {bg:'bg-gray-100 dark:bg-gray-700',text:'text-gray-500'}).bg} ${(STATUS_CFG[s] || {bg:'',text:'text-gray-500'}).text}`}>
-              {n} {s}
-            </span>
-          ))}
-        </div>
-
-        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${accent.badge} flex-shrink-0`}>
-          {issues.length} {issues.length === 1 ? 'issue' : 'issues'}
-        </span>
-
-        {done > 0 && (
-          <span className="text-xs text-green-600 dark:text-green-400 flex-shrink-0 hidden md:block">
-            ✓ {done} concluído{done > 1 ? 's' : ''}
-          </span>
-        )}
-
-        <span className="text-gray-400 text-xs w-4 flex-shrink-0">{open ? '▼' : '▶'}</span>
-      </button>
-
-      {open && (
-        <div>
-          {issues.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">Sem issues abertas.</p>
-          ) : (
-            issues.map((it) => <IssueRow key={it.key} item={it} />)
-          )}
-        </div>
-      )}
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:6 }}>
+        <span><strong style={{ color:'#111' }}>{burndown.sprint}</strong></span>
+        <span>{done} / {total} concluídos ({pct(pctDone)})</span>
+      </div>
+      <div style={{ height:12, background:'#f3f4f6', borderRadius:99, overflow:'hidden' }}>
+        <div style={{ height:'100%', width:`${pctDone * 100}%`, background:color, borderRadius:99, transition:'width .5s' }} />
+      </div>
+      <div style={{ display:'flex', gap:16, marginTop:8, fontSize:12 }}>
+        <span style={{ color:'#10b981' }}>✓ {done} concluídos</span>
+        <span style={{ color:'#f59e0b' }}>↻ {remaining} restantes</span>
+      </div>
     </div>
   );
 }
 
-// ── Seção de projeto ──────────────────────────────────────────────────────────
+// ── Tabela de contribuição ────────────────────────────────────────────────────
+function ContributorsTable({ contributors, color }) {
+  if (!contributors?.length) return <div style={{ color:'#9ca3af', fontSize:13 }}>Sem dados.</div>;
+  return (
+    <div style={{ overflowX:'auto' }}>
+      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+        <thead>
+          <tr style={{ borderBottom:'2px solid #f3f4f6' }}>
+            {['Desenvolvedor','Total','Concluídos','% Contrib.','Sprint ativa'].map(h => (
+              <th key={h} style={{ padding:'8px 10px', textAlign: h === 'Desenvolvedor' ? 'left' : 'center', fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.05em', whiteSpace:'nowrap' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {contributors.map((c, i) => (
+            <tr key={c.name} style={{ borderBottom:'1px solid #f9fafb', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+              <td style={{ padding:'8px 10px', fontWeight:600, color:'#111' }}>{c.name}</td>
+              <td style={{ padding:'8px 10px', textAlign:'center', fontWeight:700 }}>{c.total}</td>
+              <td style={{ padding:'8px 10px', textAlign:'center', color:'#10b981', fontWeight:600 }}>{c.done}</td>
+              <td style={{ padding:'8px 10px', textAlign:'center' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, justifyContent:'center' }}>
+                  <div style={{ height:6, width:60, background:'#f3f4f6', borderRadius:99, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${c.pct * 100}%`, background:color, borderRadius:99 }} />
+                  </div>
+                  <span style={{ fontSize:11, color:'#6b7280', minWidth:32 }}>{pct(c.pct)}</span>
+                </div>
+              </td>
+              <td style={{ padding:'8px 10px', textAlign:'center' }}>
+                {c.active ? <span style={{ background:'#d1fae5', color:'#065f46', borderRadius:99, padding:'2px 10px', fontSize:11, fontWeight:700 }}>✓ Sim</span>
+                           : <span style={{ background:'#f3f4f6', color:'#9ca3af', borderRadius:99, padding:'2px 10px', fontSize:11 }}>Não</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-function ProjectSection({ projKey, data }) {
-  const [open, setOpen] = useState(true);
-  const accent = PROJ_ACCENT[projKey] || PROJ_ACCENT.CRPR;
+// ── Tooltip customizado ───────────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background:'#1f2937', color:'#f9fafb', borderRadius:10, padding:'10px 14px', fontSize:12 }}>
+      <div style={{ fontWeight:700, marginBottom:4 }}>{label}</div>
+      {payload.map(p => (
+        <div key={p.name} style={{ color: p.color || '#f9fafb' }}>
+          {p.name}: <strong>{typeof p.value === 'number' && p.value < 2 ? pct(p.value) : p.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-  const engineers = Object.entries(data.byAssignee);
-  const hasOthers = data.outros && data.outros.length > 0;
+// ── Aba de projeto ────────────────────────────────────────────────────────────
+function ProjectTab({ projKey, data }) {
+  const cfg    = PROJ[projKey];
+  const color  = cfg.color;
+  const sprints = data.sprints || [];
+
+  // dados para gráficos (exclui ativa do histórico de barras fechadas)
+  const closedSprints = sprints.filter(s => s.state === 'closed');
+  const activeSprint  = sprints.find(s => s.state === 'active');
+
+  const chartData = closedSprints.map(s => ({
+    sprint:     shortSprint(s.name),
+    Throughput: s.throughput,
+    'SP Entregues': s.sp_done,
+    'Taxa (%)': +(s.completion_rate * 100).toFixed(0),
+  }));
+
+  // KPIs da sprint mais recente
+  const lastClosed = closedSprints[closedSprints.length - 1];
+  const kpiSprint  = activeSprint || lastClosed;
 
   return (
-    <div className="space-y-2">
-      {/* Project header */}
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-3 py-2 text-left group"
-      >
-        <span className={`w-1 h-6 rounded-full flex-shrink-0 ${accent.dot}`} />
-        <span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">
-          {data.name}
-        </span>
-        <span className="font-mono text-xs text-gray-400 dark:text-gray-500">({projKey})</span>
-        <span className={`ml-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${accent.badge}`}>
-          {data.total} issues
-        </span>
-        <span className="text-gray-400 text-xs ml-auto">{open ? '▼' : '▶'}</span>
-      </button>
+    <div style={{ display:'flex', flexDirection:'column', gap:24 }}>
 
-      {open && (
-        <div className="pl-4 space-y-2">
-          {engineers.map(([eng, issues]) => (
-            <EngineerCard key={eng} name={eng} issues={issues} projKey={projKey} />
-          ))}
-          {hasOthers && (
-            <EngineerCard name="Outros / Sem atribuição" issues={data.outros} projKey={projKey} />
-          )}
+      {/* Sprint ativa */}
+      {data.active_sprint && (
+        <div style={{ background:'#f0fdf4', border:'1.5px solid #bbf7d0', borderRadius:12, padding:'12px 18px', fontSize:13, color:'#166534' }}>
+          <strong>Sprint ativa:</strong> {data.active_sprint.name}
+          {data.active_sprint.start && ` · ${fmtDate(data.active_sprint.start)} → ${fmtDate(data.active_sprint.end)}`}
+          {data.active_sprint.goal && <div style={{ marginTop:4, color:'#15803d', fontStyle:'italic' }}>"{data.active_sprint.goal}"</div>}
         </div>
       )}
+
+      {/* KPIs */}
+      {kpiSprint && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:12 }}>
+          <KpiCard label="Throughput" value={kpiSprint.throughput} sub={`de ${kpiSprint.total} comprometidos`} color={color} />
+          <KpiCard label="Taxa Conclusão" value={pct(kpiSprint.completion_rate)} sub={kpiSprint.state === 'active' ? 'sprint ativa' : 'última sprint'} color={color} />
+          <KpiCard label="SP Entregues" value={kpiSprint.sp_done} sub={`de ${kpiSprint.sp_total} SP`} color={color} />
+          <KpiCard label="Sprints analisadas" value={closedSprints.length + (activeSprint ? 1 : 0)} sub="fechadas + ativa" color="#6b7280" />
+        </div>
+      )}
+
+      {chartData.length > 0 && (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px,1fr))', gap:16 }}>
+
+          {/* Throughput */}
+          <div style={{ background:'#fff', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'16px 20px' }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#374151', marginBottom:12 }}>Throughput por Sprint</div>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={chartData} margin={{ top:0, right:8, bottom:0, left:-20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="sprint" tick={{ fontSize:10 }} />
+                <YAxis tick={{ fontSize:10 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="Throughput" radius={[4,4,0,0]}>
+                  {chartData.map((_, i) => <Cell key={i} fill={color} fillOpacity={0.75 + i * 0.04} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Story Points */}
+          <div style={{ background:'#fff', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'16px 20px' }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#374151', marginBottom:12 }}>Story Points Entregues</div>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={chartData} margin={{ top:0, right:8, bottom:0, left:-20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="sprint" tick={{ fontSize:10 }} />
+                <YAxis tick={{ fontSize:10 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="SP Entregues" radius={[4,4,0,0]} fill={color} fillOpacity={0.65} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Taxa de conclusão */}
+          <div style={{ background:'#fff', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'16px 20px' }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#374151', marginBottom:12 }}>Taxa de Conclusão (%)</div>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={chartData} margin={{ top:0, right:8, bottom:0, left:-20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="sprint" tick={{ fontSize:10 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize:10 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Line dataKey="Taxa (%)" type="monotone" stroke={color} strokeWidth={2.5} dot={{ r:3, fill:color }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Burndown */}
+      <div style={{ background:'#fff', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'16px 20px' }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#374151', marginBottom:12 }}>Burndown — Sprint Ativa</div>
+        <BurndownBar burndown={data.burndown} color={color} />
+      </div>
+
+      {/* Contribuição por dev */}
+      <div style={{ background:'#fff', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'16px 20px' }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#374151', marginBottom:12 }}>
+          Contribuição por Desenvolvedor
+          <span style={{ fontWeight:400, color:'#9ca3af', marginLeft:8, fontSize:11 }}>últimas {data.sprints?.length || 0} sprints</span>
+        </div>
+        <ContributorsTable contributors={data.contributors} color={color} />
+      </div>
+    </div>
+  );
+}
+
+// ── Aba consolidada ────────────────────────────────────────────────────────────
+function ConsolidadoTab({ data }) {
+  // Throughput comparado: une sprints pelo nome curto
+  const sprintMap = {};
+  for (const key of PROJ_ORDER) {
+    const proj = data[key];
+    if (!proj) continue;
+    for (const sp of (proj.sprints || [])) {
+      const label = shortSprint(sp.name);
+      if (!sprintMap[label]) sprintMap[label] = { sprint: label };
+      sprintMap[label][PROJ[key].name] = sp.throughput;
+    }
+  }
+  const chartData = Object.values(sprintMap).slice(-7);
+
+  const kpiTotal = PROJ_ORDER.reduce((s, k) => {
+    const active = data[k]?.sprints?.find(sp => sp.state === 'active') || data[k]?.sprints?.slice(-1)[0];
+    return { throughput: s.throughput + (active?.throughput || 0), total: s.total + (active?.total || 0) };
+  }, { throughput: 0, total: 0 });
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:24 }}>
+
+      {/* KPIs globais */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:12 }}>
+        {PROJ_ORDER.map(k => {
+          const proj = data[k];
+          const sp = proj?.sprints?.find(s => s.state === 'active') || proj?.sprints?.slice(-1)[0];
+          return (
+            <div key={k} style={{ flex:1, minWidth:160, background:'#fff', border:`2px solid ${PROJ[k].color}33`, borderRadius:14, padding:'16px 20px' }}>
+              <div style={{ fontSize:11, fontWeight:700, color: PROJ[k].color, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:4 }}>{PROJ[k].name}</div>
+              <div style={{ fontSize:28, fontWeight:900, color: PROJ[k].color }}>{sp?.throughput ?? '—'}</div>
+              <div style={{ fontSize:11, color:'#9ca3af' }}>
+                {sp ? `${pct(sp.completion_rate)} · ${sp.sp_done} SP` : 'sem dados'}
+              </div>
+            </div>
+          );
+        })}
+        <KpiCard label="Total (3 times)" value={kpiTotal.throughput} sub={`de ${kpiTotal.total} comprometidos`} color="#374151" />
+      </div>
+
+      {/* Throughput comparado */}
+      {chartData.length > 0 && (
+        <div style={{ background:'#fff', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'16px 20px' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#374151', marginBottom:12 }}>Throughput Comparado por Sprint</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData} margin={{ top:0, right:8, bottom:0, left:-20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis dataKey="sprint" tick={{ fontSize:10 }} />
+              <YAxis tick={{ fontSize:10 }} />
+              <Tooltip content={<ChartTooltip />} />
+              <Legend wrapperStyle={{ fontSize:11 }} />
+              {PROJ_ORDER.map(k => (
+                <Bar key={k} dataKey={PROJ[k].name} fill={PROJ[k].color} radius={[3,3,0,0]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Burndown de cada time */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px,1fr))', gap:16 }}>
+        {PROJ_ORDER.map(k => (
+          <div key={k} style={{ background:'#fff', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'16px 20px' }}>
+            <div style={{ fontSize:12, fontWeight:700, color: PROJ[k].color, marginBottom:10 }}>{PROJ[k].name}</div>
+            <BurndownBar burndown={data[k]?.burndown} color={PROJ[k].color} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-
-const PROJ_ORDER = ['CRPR', 'CRMI', 'CRVE'];
-
 export default function Indicadores() {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
-  const [filter,  setFilter]  = useState('TODOS');
-  const [search,  setSearch]  = useState('');
+  const [tab,     setTab]     = useState('CRVE'); // Rewired como default
 
   const load = () => {
     setLoading(true);
     setError(null);
     getIndicadores()
       .then(setData)
-      .catch((e) => setError(e.response?.data?.error || e.message))
+      .catch(e => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
-  // Stats globais
-  const totalGlobal = data
-    ? PROJ_ORDER.reduce((s, k) => s + (data[k]?.total || 0), 0)
-    : 0;
+  const genAt = data?.generated_at
+    ? new Date(data.generated_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+    : null;
 
-  // Aplica filtro de projeto e busca por texto
-  const projsToShow = PROJ_ORDER.filter((k) => {
-    if (filter !== 'TODOS' && filter !== k) return false;
-    if (!data?.[k]) return false;
-    return true;
-  });
-
-  // Filtra issues dentro dos projetos por texto
-  function filterData(projData) {
-    if (!search) return projData;
-    const q = search.toLowerCase();
-    const filterIssues = (issues) =>
-      issues.filter((i) =>
-        i.key.toLowerCase().includes(q) ||
-        i.summary.toLowerCase().includes(q)
-      );
-    const byAssignee = {};
-    for (const [eng, issues] of Object.entries(projData.byAssignee)) {
-      byAssignee[eng] = filterIssues(issues);
-    }
-    return {
-      ...projData,
-      byAssignee,
-      outros: filterIssues(projData.outros || []),
-      total: Object.values(byAssignee).reduce((s, a) => s + a.length, 0) + filterIssues(projData.outros || []).length,
-    };
-  }
+  const TABS = [{ id:'CONSOLIDADO', label:'Consolidado' }, ...PROJ_ORDER.map(k => ({ id:k, label:PROJ[k].name }))];
 
   return (
-    <div className="space-y-5">
+    <div style={{ fontFamily:'Inter, system-ui, sans-serif', maxWidth:1100, margin:'0 auto' }}>
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:20 }}>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Indicadores</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Demandas ativas por engenheiro · Pricing · Mídia · Conversão
+          <h1 style={{ fontSize:22, fontWeight:900, color:'#111', margin:0, letterSpacing:-.5 }}>Indicadores</h1>
+          <p style={{ fontSize:12, color:'#9ca3af', margin:'4px 0 0' }}>
+            Pricing · Rewired · Mídia · velocidade por sprint via Jira
+            {genAt && <span style={{ marginLeft:8, color:'#d1d5db' }}>· atualizado {genAt}</span>}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Filtro de projeto */}
-          <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-900 shadow-sm">
-            {['TODOS', 'CRPR', 'CRMI', 'CRVE'].map((k) => {
-              const labels = { TODOS: 'Todos', CRPR: 'Pricing', CRMI: 'Mídia', CRVE: 'Conversão' };
-              const active = filter === k;
-              const accent = k !== 'TODOS' ? PROJ_ACCENT[k] : null;
-              return (
-                <button
-                  key={k}
-                  onClick={() => setFilter(k)}
-                  className={`px-3 py-1.5 text-xs font-semibold transition-colors border-r border-gray-200 dark:border-gray-700 last:border-0 ${
-                    active
-                      ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  {labels[k]}
-                  {!active && data?.[k] && (
-                    <span className="ml-1 text-gray-400 dark:text-gray-500">({data[k].total})</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Busca */}
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar issue ou título…"
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 w-48"
-          />
-
-          <button
-            onClick={load}
-            disabled={loading}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-white dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
-          >
-            {loading
-              ? <><span className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />Carregando…</>
-              : '↻ Atualizar'}
-          </button>
-        </div>
+        <button onClick={load} disabled={loading} style={{ display:'flex', alignItems:'center', gap:8, background:'#111', color:'#fff', border:'none', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:700, cursor:loading?'not-allowed':'pointer', opacity:loading?.7:1 }}>
+          {loading ? <><span style={{ display:'inline-block', width:13, height:13, border:'2px solid #fff', borderTopColor:'transparent', borderRadius:'50%', animation:'spin .8s linear infinite' }} />Carregando…</> : '↻ Atualizar'}
+        </button>
       </div>
 
-      {/* ── Stats bar ── */}
-      {data && (
-        <div className="flex flex-wrap gap-3">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-5 py-3 shadow-sm">
-            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Total Ativas</div>
-            <div className="text-3xl font-black text-gray-900 dark:text-gray-100">{totalGlobal}</div>
-          </div>
-          {PROJ_ORDER.map((k) => {
-            if (!data[k]) return null;
-            const accent = PROJ_ACCENT[k];
-            return (
-              <div
-                key={k}
-                onClick={() => setFilter(filter === k ? 'TODOS' : k)}
-                className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 cursor-pointer hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
-              >
-                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${accent.dot}`} />
-                <div>
-                  <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide leading-none mb-0.5">
-                    {data[k].name}
-                  </div>
-                  <div className="text-2xl font-black text-gray-900 dark:text-gray-100 leading-none">
-                    {data[k].total}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Tabs */}
+      <div style={{ display:'flex', gap:4, borderBottom:'2px solid #f3f4f6', marginBottom:24 }}>
+        {TABS.map(t => {
+          const color = t.id === 'CONSOLIDADO' ? '#374151' : PROJ[t.id]?.color;
+          const active = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{ padding:'8px 18px', fontSize:13, fontWeight:700, border:'none', borderBottom: active ? `2.5px solid ${color}` : '2.5px solid transparent', background:'transparent', color: active ? color : '#9ca3af', cursor:'pointer', marginBottom:-2, transition:'color .15s' }}>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* ── Erro ── */}
+      {/* Erro */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg px-4 py-3 text-sm text-red-700 dark:text-red-300">
-          <strong>Erro ao carregar:</strong> {error}
+        <div style={{ background:'#fef2f2', border:'1.5px solid #fecaca', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#b91c1c', marginBottom:20 }}>
+          <strong>Erro:</strong> {error}
         </div>
       )}
 
-      {/* ── Skeleton ── */}
+      {/* Skeleton */}
       {loading && (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="space-y-2">
-              <div className="h-8 w-48 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
-              <div className="h-32 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
-            </div>
-          ))}
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          {[1,2,3].map(i => <div key={i} style={{ height: i===1 ? 80 : 200, borderRadius:14, background:'#f3f4f6', animation:'pulse 1.5s ease-in-out infinite' }} />)}
         </div>
       )}
 
-      {/* ── Projetos ── */}
+      {/* Conteúdo */}
       {!loading && data && (
-        <div className="space-y-6">
-          {projsToShow.map((k) => (
-            <ProjectSection key={k} projKey={k} data={filterData(data[k])} />
-          ))}
-        </div>
+        tab === 'CONSOLIDADO'
+          ? <ConsolidadoTab data={data} />
+          : <ProjectTab projKey={tab} data={data[tab]} />
       )}
 
-      {!loading && data && projsToShow.length === 0 && (
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-10 text-center text-gray-400 text-sm">
-          Nenhum dado encontrado.
-        </div>
+      {!loading && !data && !error && (
+        <div style={{ textAlign:'center', padding:'60px 0', color:'#9ca3af', fontSize:14 }}>Clique em Atualizar para carregar os dados.</div>
       )}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+      `}</style>
     </div>
   );
 }

@@ -7,96 +7,163 @@ function getHeaders() {
   return { Authorization: `Basic ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
 }
 
-async function fetchByKeys(keys, fields) {
-  const jql = `issueKey in (${keys.join(',')}) ORDER BY key ASC`;
-  const url  = `${process.env.JIRA_BASE_URL}/rest/api/3/search/jql`;
-  const { data } = await axios.post(url, { jql, fields, maxResults: 200 }, { headers: getHeaders(), timeout: 20000 });
-  return data.issues || [];
-}
-
-// ── Issues hardcodadas por engenheiro ─────────────────────────────────────────
-const CONFIG = {
-  CRPR: {
-    name: 'Pricing',
-    engineers: {
-      'Glauber':         ['CRPR-12', 'CRPR-4',  'CRPR-5'],
-      'Josielho Canuto': ['CRPR-14', 'CRPR-12', 'CRPR-8'],
-    },
-  },
-  CRMI: {
-    name: 'Mídia',
-    engineers: {
-      'Samuel Alexandre': ['CRMI-122', 'CRMI-124', 'CRMI-144'],
-    },
-  },
-  CRVE: {
-    name: 'Conversão',
-    engineers: {
-      'Iago': ['CRVE-69',  'CRVE-44'],
-      'Yuir': ['CRVE-122', 'CRVE-123'],
-    },
-  },
+const BOARDS = {
+  CRPR: { name: 'Pricing',  boardId: 8075 },
+  CRVE: { name: 'Rewired',  boardId: 8145 },
+  CRMI: { name: 'Mídia',    boardId: 8143 },
 };
 
-const DONE_STATUSES = new Set(['Concluído', 'Done', 'Aceito', 'Closed', 'Resolvido']);
+const SP_FIELD   = 'customfield_10026';
+const DONE_CAT   = 'done';
+const SPRINT_QTY = 6; // sprints fechadas para histórico
 
-const FIELDS = ['summary', 'status', 'issuetype', 'assignee', 'priority', 'created', 'updated'];
+// tipos que pontuam SP
+const SP_TYPES = new Set(['História', 'Story', 'Enabler', 'Spike', 'Débito Técnico', 'Bug', 'Feature']);
+
+async function getSprints(boardId) {
+  const base = process.env.JIRA_BASE_URL;
+  try {
+    const [closedRes, activeRes] = await Promise.all([
+      axios.get(`${base}/rest/agile/1.0/board/${boardId}/sprint?state=closed&maxResults=50`, { headers: getHeaders(), timeout: 15000 }),
+      axios.get(`${base}/rest/agile/1.0/board/${boardId}/sprint?state=active&maxResults=1`,  { headers: getHeaders(), timeout: 15000 }),
+    ]);
+    const closed = (closedRes.data.values || []).slice(-SPRINT_QTY);
+    const active = activeRes.data.values || [];
+    return [...closed, ...active];
+  } catch (e) {
+    console.error(`[indicadores] getSprints(${boardId}):`, e.response?.data || e.message);
+    return [];
+  }
+}
+
+async function getSprintIssues(boardId, sprintId) {
+  const base    = process.env.JIRA_BASE_URL;
+  const fields  = `summary,status,issuetype,${SP_FIELD},assignee`;
+  const all     = [];
+  let startAt   = 0;
+  for (let page = 0; page < 15; page++) {
+    try {
+      const { data } = await axios.get(
+        `${base}/rest/agile/1.0/board/${boardId}/sprint/${sprintId}/issue?fields=${fields}&maxResults=100&startAt=${startAt}`,
+        { headers: getHeaders(), timeout: 15000 }
+      );
+      const issues = data.issues || [];
+      all.push(...issues);
+      if (issues.length === 0 || startAt + 100 >= (data.total || 0)) break;
+      startAt += 100;
+    } catch (e) {
+      console.error(`[indicadores] getSprintIssues(${boardId},${sprintId}):`, e.response?.data || e.message);
+      break;
+    }
+  }
+  return all;
+}
+
+function analyzeIssues(issues) {
+  let total = 0, done = 0, spTotal = 0, spDone = 0;
+  const byType     = {};
+  const byAssignee = {};
+
+  for (const issue of issues) {
+    const f        = issue.fields || {};
+    const cat      = f.status?.statusCategory?.key || '';
+    const type     = f.issuetype?.name || 'Outro';
+    const assignee = f.assignee?.displayName || 'Sem atribuição';
+    const sp       = typeof f[SP_FIELD] === 'number' ? f[SP_FIELD] : 0;
+    const isDone   = cat === DONE_CAT;
+
+    total++;
+    if (isDone) done++;
+
+    if (SP_TYPES.has(type) && sp > 0) {
+      spTotal += sp;
+      if (isDone) spDone += sp;
+    }
+
+    byType[type] = (byType[type] || 0) + 1;
+    if (!byAssignee[assignee]) byAssignee[assignee] = { total: 0, done: 0 };
+    byAssignee[assignee].total++;
+    if (isDone) byAssignee[assignee].done++;
+  }
+
+  return {
+    total,
+    done,
+    throughput:       done,
+    sp_total:         spTotal,
+    sp_done:          spDone,
+    completion_rate:  total > 0 ? +(done / total).toFixed(3) : 0,
+    by_type:          byType,
+    by_assignee:      byAssignee,
+  };
+}
+
+async function buildProjectData(projKey, cfg) {
+  const sprints = await getSprints(cfg.boardId);
+  if (!sprints.length) return { name: cfg.name, sprints: [], contributors: [], burndown: null, active_sprint: null };
+
+  // busca issues de todas as sprints em paralelo
+  const sprintResults = await Promise.all(
+    sprints.map(async (sp) => {
+      const issues  = await getSprintIssues(cfg.boardId, sp.id);
+      const metrics = analyzeIssues(issues);
+      return {
+        id:    sp.id,
+        name:  sp.name,
+        state: sp.state,
+        start: sp.startDate ? sp.startDate.slice(0, 10) : null,
+        end:   sp.endDate   ? sp.endDate.slice(0, 10)   : null,
+        goal:  sp.goal || null,
+        ...metrics,
+      };
+    })
+  );
+
+  // burndown da sprint ativa
+  const activeSprint = sprintResults.find(s => s.state === 'active') || null;
+  const burndown = activeSprint ? {
+    sprint:      activeSprint.name,
+    total:       activeSprint.total,
+    done:        activeSprint.done,
+    remaining:   activeSprint.total - activeSprint.done,
+    by_type:     activeSprint.by_type,
+  } : null;
+
+  // contribuição por dev agregando todas as sprints coletadas
+  const contribMap = {};
+  for (const sp of sprintResults) {
+    for (const [name, counts] of Object.entries(sp.by_assignee)) {
+      if (!contribMap[name]) contribMap[name] = { total: 0, done: 0, active: false };
+      contribMap[name].total += counts.total;
+      contribMap[name].done  += counts.done;
+      if (sp.state === 'active' && counts.total > 0) contribMap[name].active = true;
+    }
+  }
+  const grandTotal = Object.values(contribMap).reduce((s, c) => s + c.total, 0);
+  const contributors = Object.entries(contribMap)
+    .map(([name, c]) => ({ name, ...c, pct: grandTotal > 0 ? +(c.total / grandTotal).toFixed(3) : 0 }))
+    .sort((a, b) => b.total - a.total);
+
+  return {
+    name:          cfg.name,
+    active_sprint: activeSprint ? { name: activeSprint.name, start: activeSprint.start, end: activeSprint.end, goal: activeSprint.goal } : null,
+    sprints:       sprintResults,
+    burndown,
+    contributors,
+  };
+}
 
 // GET /api/indicadores
 router.get('/indicadores', async (req, res) => {
   try {
-    // Coleta todas as chaves únicas
-    const allKeys = [];
-    for (const proj of Object.values(CONFIG)) {
-      for (const keys of Object.values(proj.engineers)) {
-        for (const k of keys) {
-          if (!allKeys.includes(k)) allKeys.push(k);
-        }
-      }
-    }
-
-    const raw = await fetchByKeys(allKeys, FIELDS);
-
-    // Indexa por chave para lookup rápido
-    const byKey = {};
-    for (const issue of raw) {
-      byKey[issue.key] = issue;
-    }
-
-    // Monta resultado agrupado
-    const result = {};
-    for (const [projKey, projCfg] of Object.entries(CONFIG)) {
-      const byAssignee = {};
-
-      for (const [eng, keys] of Object.entries(projCfg.engineers)) {
-        byAssignee[eng] = keys
-          .map((k) => {
-            const issue = byKey[k];
-            if (!issue) return null;
-            const f      = issue.fields;
-            const status = f.status?.name || '';
-            if (DONE_STATUSES.has(status)) return null; // exclui concluídas
-            return {
-              key:      issue.key,
-              summary:  f.summary || '',
-              status,
-              type:     f.issuetype?.name || '',
-              priority: f.priority?.name || 'Medium',
-              assignee: f.assignee?.displayName || null,
-              created:  f.created ? f.created.slice(0, 10) : null,
-              updated:  f.updated ? f.updated.slice(0, 10) : null,
-            };
-          })
-          .filter(Boolean);
-      }
-
-      const total = Object.values(byAssignee).reduce((s, arr) => s + arr.length, 0);
-      result[projKey] = { name: projCfg.name, byAssignee, outros: [], total };
-    }
-
-    res.json(result);
+    const entries = await Promise.all(
+      Object.entries(BOARDS).map(async ([key, cfg]) => [key, await buildProjectData(key, cfg)])
+    );
+    const data = Object.fromEntries(entries);
+    data.generated_at = new Date().toISOString();
+    res.json(data);
   } catch (e) {
-    console.error('Indicadores error:', e.message);
+    console.error('[indicadores] erro:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
