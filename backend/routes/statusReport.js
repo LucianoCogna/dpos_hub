@@ -461,7 +461,7 @@ router.get('/status-report', async (req, res) => {
       const labelFilter = config.labels
         ? `labels in (${config.labels.map((l) => `"${l}"`).join(', ')})`
         : `labels = "${config.label}"`;
-      const jql = `project = ${projectKey} AND ${labelFilter} AND issuetype in ("História (M)", História, Story) ORDER BY key ASC`;
+      const jql = `project = ${projectKey} AND ${labelFilter} AND issuetype in ("História (M)", História, Story, Problema) ORDER BY key ASC`;
       console.log(`[status-report] JQL: ${jql}`);
       storyIssues = await fetchAll(jql, DAPL_FIELDS);
       console.log(`[status-report] ${projectKey}/${areaKey}: ${storyIssues.length} issues encontradas`);
