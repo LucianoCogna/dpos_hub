@@ -513,7 +513,6 @@ router.get('/status-report', async (req, res) => {
 
     res.json({
       area:             areaKey,
-      _items_fetched:   items.length,
       current_sprint:   currentSprint,
       next_sprint:      nextSp,
       today:            toISO(today),
