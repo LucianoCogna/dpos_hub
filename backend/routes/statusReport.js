@@ -461,17 +461,13 @@ router.get('/status-report', async (req, res) => {
       const labelFilter = config.labels
         ? `labels in (${config.labels.map((l) => `"${l}"`).join(', ')})`
         : `labels = "${config.label}"`;
-      const jql = `project = ${projectKey} AND ${labelFilter} AND issuetype in ("História (M)", História, Story, Problema) ORDER BY key ASC`;
+      const typeFilter = isRevOffice
+        ? `issuetype not in (Épico, Epic)`
+        : `issuetype in ("História (M)", História, Story)`;
+      const jql = `project = ${projectKey} AND ${labelFilter} AND ${typeFilter} ORDER BY key ASC`;
       console.log(`[status-report] JQL: ${jql}`);
       storyIssues = await fetchAll(jql, DAPL_FIELDS);
       console.log(`[status-report] ${projectKey}/${areaKey}: ${storyIssues.length} issues encontradas`);
-      if (storyIssues.length === 0 && isRevOffice) {
-        // tenta sem filtro de issuetype pra diagnóstico
-        const jqlNoType = `project = ${projectKey} AND ${labelFilter} ORDER BY key ASC`;
-        const fallback = await fetchAll(jqlNoType, DAPL_FIELDS);
-        console.log(`[status-report] sem issuetype: ${fallback.length} issues`);
-        storyIssues = fallback;
-      }
     } catch (e) {
       console.error(`[status-report] ERRO ao buscar issues do Jira (${projectKey}/${areaKey}):`, e.response?.data || e.message);
     }
