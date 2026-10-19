@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, Cell, LabelList,
+  Tooltip, ResponsiveContainer, Legend, Cell, LabelList, PieChart, Pie,
 } from 'recharts';
 import { getIndicadores } from '../services/api';
 
@@ -12,6 +12,12 @@ const PROJ = {
   CRMI: { name: 'Mídia',   color: '#10b981' },
 };
 const PROJ_ORDER = ['CRPR', 'CRVE', 'CRMI'];
+
+const PRICING_SQUADS = [
+  { key: 'dev_pricing',   label: 'Dev',   color: '#5521B5' },
+  { key: 'dados_pricing', label: 'Dados', color: '#7c3aed' },
+  { key: 'DS_pricing',    label: 'DS',    color: '#a78bfa' },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const pct  = (v) => `${(v * 100).toFixed(0)}%`;
@@ -26,6 +32,11 @@ const fmtDate = (iso) => {
   return `${d}/${m}/${String(y).slice(2)}`;
 };
 const avg = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+
+const completionColor = (v) =>
+  v >= 90 ? '#16a34a' : v >= 75 ? '#ca8a04' : '#dc2626';
+const completionBg = (v) =>
+  v >= 90 ? '#f0fdf4' : v >= 75 ? '#fefce8' : '#fef2f2';
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, color = '#5521B5' }) {
@@ -90,7 +101,6 @@ function BurndownLineChart({ burndown, color }) {
 
   const { total, done, remaining, start, end } = burndown;
 
-  // calcula dias corridos da sprint e posição atual
   const startMs  = start ? new Date(start).getTime() : null;
   const endMs    = end   ? new Date(end).getTime()   : null;
   const todayMs  = new Date().setHours(0, 0, 0, 0);
@@ -111,7 +121,6 @@ function BurndownLineChart({ burndown, color }) {
 
   return (
     <div>
-      {/* resumo */}
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#888', marginBottom: 8 }}>
         <strong style={{ color: '#1a1a2e', fontSize: 13 }}>{burndown.sprint}</strong>
         <span>
@@ -119,11 +128,9 @@ function BurndownLineChart({ burndown, color }) {
           {done} / {total} concluídos · dia {dayNow}/{totalDays}
         </span>
       </div>
-      {/* barra de progresso */}
       <div style={{ height: 8, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden', marginBottom: 16 }}>
         <div style={{ height: '100%', width: `${total > 0 ? (done / total) * 100 : 0}%`, background: color, borderRadius: 99, transition: 'width .5s' }} />
       </div>
-      {/* gráfico */}
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
@@ -210,6 +217,256 @@ function BurndownByType({ burndown, color }) {
   );
 }
 
+// ── Heatmap histórico de sprints ──────────────────────────────────────────────
+function SprintHistoryTable({ sprints, color }) {
+  const closed = [...sprints]
+    .filter(s => s.state === 'closed')
+    .sort((a, b) => shortSprint(a.name).localeCompare(shortSprint(b.name)));
+  if (!closed.length) return <div style={{ color: '#bbb', fontSize: 13 }}>Sem sprints fechadas.</div>;
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ borderBottom: '2px solid #f0e8ff' }}>
+            {['Sprint', 'Total', 'Entregues', 'Conclusão', 'SP Total', 'SP Entregues'].map(h => (
+              <th key={h} style={{ padding: '7px 10px', fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: h === 'Sprint' ? 'left' : 'center', whiteSpace: 'nowrap' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {closed.map((s, i) => {
+            const rate = +(s.completion_rate * 100).toFixed(0);
+            return (
+              <tr key={s.id} style={{ background: i % 2 === 0 ? '#fafafa' : '#fff', borderBottom: '1px solid #f5f0ff' }}>
+                <td style={{ padding: '8px 10px', fontWeight: 700, color }}>
+                  {shortSprint(s.name)}
+                  {s.start && <span style={{ fontWeight: 400, color: '#999', fontSize: 10, marginLeft: 6 }}>{fmtDate(s.start)}</span>}
+                </td>
+                <td style={{ padding: '8px 10px', textAlign: 'center', color: '#555' }}>{s.total}</td>
+                <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700, color: '#10b981' }}>{s.done}</td>
+                <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                  <span style={{
+                    background: completionBg(rate), color: completionColor(rate),
+                    borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 700,
+                  }}>{rate}%</span>
+                </td>
+                <td style={{ padding: '8px 10px', textAlign: 'center', color: '#555' }}>{s.sp_total || 0}</td>
+                <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                    <div style={{ height: 6, width: 44, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${s.sp_total > 0 ? (s.sp_done / s.sp_total) * 100 : 0}%`, background: color, borderRadius: 99 }} />
+                    </div>
+                    <span style={{ fontWeight: 700, color }}>{s.sp_done || 0}</span>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Distribuição por tipo (gráfico pizza) ─────────────────────────────────────
+function IssueTypeDonut({ sprints, color }) {
+  const closed = sprints.filter(s => s.state === 'closed');
+  if (!closed.length) return null;
+
+  const totals = {};
+  const dones  = {};
+  for (const sp of closed) {
+    for (const [t, v] of Object.entries(sp.by_type || {})) {
+      totals[t] = (totals[t] || 0) + v;
+    }
+    for (const [t, v] of Object.entries(sp.by_type_done || {})) {
+      dones[t] = (dones[t] || 0) + v;
+    }
+  }
+
+  const data = Object.entries(totals)
+    .map(([tipo, total]) => ({ tipo, total, done: dones[tipo] || 0, rate: total > 0 ? +((dones[tipo] || 0) / total * 100).toFixed(0) : 0 }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8);
+
+  const COLORS = [color, '#818cf8', '#34d399', '#f59e0b', '#f87171', '#a78bfa', '#67e8f9', '#fca5a5'];
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'center' }}>
+      <ResponsiveContainer width="100%" height={180}>
+        <PieChart>
+          <Pie data={data} dataKey="total" nameKey="tipo" cx="50%" cy="50%" outerRadius={72} innerRadius={36}>
+            {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+          </Pie>
+          <Tooltip formatter={(v, name) => [v, name]} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {data.map((d, i) => (
+          <div key={d.tipo} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: COLORS[i % COLORS.length], flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: '#555', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.tipo}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#333', minWidth: 24 }}>{d.total}</span>
+            <span style={{ fontSize: 10, color: completionColor(d.rate), background: completionBg(d.rate), borderRadius: 99, padding: '1px 6px', fontWeight: 600 }}>{d.rate}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── SP acumulado ──────────────────────────────────────────────────────────────
+function CumulativeSpChart({ sprints, color }) {
+  const closed = [...sprints]
+    .filter(s => s.state === 'closed')
+    .sort((a, b) => shortSprint(a.name).localeCompare(shortSprint(b.name)));
+  if (!closed.length) return null;
+
+  let cumSp = 0;
+  let cumThr = 0;
+  const data = closed.map(s => {
+    cumSp  += s.sp_done || 0;
+    cumThr += s.done || 0;
+    return { sprint: shortSprint(s.name), 'SP Sprint': s.sp_done || 0, 'SP Acum.': cumSp, 'Itens Acum.': cumThr };
+  });
+
+  return (
+    <ResponsiveContainer width="100%" height={190}>
+      <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+        <XAxis dataKey="sprint" tick={{ fontSize: 10 }} />
+        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+        <Tooltip content={<ChartTooltip />} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Bar dataKey="SP Sprint" fill={`${color}55`} />
+        <Line dataKey="SP Acum." type="monotone" stroke={color} strokeWidth={2.5} dot={{ r: 3, fill: color }} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ── Squads Pricing ────────────────────────────────────────────────────────────
+function PricingSquadsSection({ data, color }) {
+  const [activeSquad, setActiveSquad] = useState(PRICING_SQUADS[0].key);
+  const squad = PRICING_SQUADS.find(s => s.key === activeSquad);
+
+  const sprints = data.sprints || [];
+  const closedSprints = [...sprints.filter(s => s.state === 'closed')]
+    .sort((a, b) => shortSprint(a.name).localeCompare(shortSprint(b.name)));
+
+  // Chart: throughput comparado entre squads
+  const compData = closedSprints.map(s => {
+    const row = { sprint: shortSprint(s.name) };
+    for (const sq of PRICING_SQUADS) {
+      row[sq.label] = s.by_label?.[sq.key] != null
+        ? (s.by_label_done?.[sq.key] || 0)
+        : null;
+    }
+    return row;
+  });
+
+  // Métricas do squad selecionado
+  const squadCumulative = closedSprints.reduce((s, sp) => s + (sp.by_label_done?.[activeSquad] || 0), 0);
+  const squadAvgThr     = avg(closedSprints.map(s => s.by_label_done?.[activeSquad] || 0));
+  const squadTotal      = closedSprints.reduce((s, sp) => s + (sp.by_label?.[activeSquad] || 0), 0);
+  const squadRate       = squadTotal > 0 ? +((squadCumulative / squadTotal) * 100).toFixed(0) : 0;
+
+  const activeSprint    = sprints.find(s => s.state === 'active');
+  const activeSquadThr  = activeSprint?.by_label_done?.[activeSquad] ?? null;
+  const activeSquadTot  = activeSprint?.by_label?.[activeSquad] ?? null;
+
+  // Sprint history por squad
+  const squadSprintData = closedSprints.map(s => ({
+    sprint: shortSprint(s.name),
+    total:  s.by_label?.[activeSquad] || 0,
+    done:   s.by_label_done?.[activeSquad] || 0,
+    rate:   (s.by_label?.[activeSquad] || 0) > 0
+      ? +((s.by_label_done?.[activeSquad] || 0) / s.by_label[activeSquad] * 100).toFixed(0)
+      : 0,
+  }));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Sub-tabs squad */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid #f3f4f6' }}>
+        {PRICING_SQUADS.map(sq => {
+          const active = sq.key === activeSquad;
+          return (
+            <button key={sq.key} onClick={() => setActiveSquad(sq.key)} style={{
+              padding: '7px 16px', fontSize: 12, fontWeight: 700, border: 'none',
+              borderBottom: active ? `2.5px solid ${sq.color}` : '2.5px solid transparent',
+              background: 'transparent', color: active ? sq.color : '#aaa',
+              cursor: 'pointer', marginBottom: -2,
+            }}>
+              {sq.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* KPIs do squad */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+        <KpiCard label="Itens entregues (acum.)" value={squadCumulative} sub="sprints fechadas" color={squad.color} />
+        <KpiCard label="Throughput médio"         value={squadAvgThr}    sub="itens/sprint"     color={squad.color} />
+        <KpiCard label="Taxa de conclusão"        value={`${squadRate}%`} sub="acumulado"        color={squad.color} />
+        {activeSquadThr != null && (
+          <KpiCard label="Sprint ativa — entregues" value={activeSquadThr} sub={activeSquadTot != null ? `de ${activeSquadTot} comprometidos` : ''} color={squad.color} />
+        )}
+      </div>
+
+      {/* Throughput comparado */}
+      <Card title="Throughput por Squad — Histórico" color={color}>
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={compData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+            <XAxis dataKey="sprint" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+            <Tooltip content={<ChartTooltip />} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            {PRICING_SQUADS.map(sq => (
+              <Line key={sq.key} dataKey={sq.label} type="monotone" stroke={sq.color} strokeWidth={2.5} dot={{ r: 3, fill: sq.color }} activeDot={{ r: 5 }} connectNulls />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* Histórico do squad selecionado */}
+      {squadSprintData.some(d => d.total > 0) && (
+        <Card title={`Histórico Sprint — ${squad.label}`} color={squad.color}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #f0e8ff' }}>
+                  {['Sprint', 'Comprometido', 'Entregues', 'Taxa'].map(h => (
+                    <th key={h} style={{ padding: '7px 10px', fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: h === 'Sprint' ? 'left' : 'center' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {squadSprintData.map((row, i) => (
+                  <tr key={row.sprint} style={{ background: i % 2 === 0 ? '#fafafa' : '#fff', borderBottom: '1px solid #f5f0ff' }}>
+                    <td style={{ padding: '7px 10px', fontWeight: 700, color: squad.color }}>{row.sprint}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'center', color: '#555' }}>{row.total || '—'}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'center', fontWeight: 700, color: '#10b981' }}>{row.done || '—'}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                      {row.total > 0
+                        ? <span style={{ background: completionBg(row.rate), color: completionColor(row.rate), borderRadius: 99, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}>{row.rate}%</span>
+                        : <span style={{ color: '#ddd' }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+    </div>
+  );
+}
+
 // ── Aba de projeto ────────────────────────────────────────────────────────────
 function ProjectTab({ projKey, data }) {
   const { color } = PROJ[projKey];
@@ -228,7 +485,7 @@ function ProjectTab({ projKey, data }) {
   const cumulative    = sprints.reduce((s, sp) => s + sp.throughput, 0);
   const avgThroughput = avg(closedSprints.map(s => s.throughput));
   const avgConclusao  = avg(closedSprints.map(s => +(s.completion_rate * 100).toFixed(0)));
-  const teamSize      = data.contributors?.length ?? 0;
+  const totalSp       = sprints.reduce((s, sp) => s + (sp.sp_done || 0), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
@@ -244,11 +501,11 @@ function ProjectTab({ projKey, data }) {
 
       {/* KPIs */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-        <KpiCard label="Itens entregues (acum.)" value={cumulative}      sub="throughput total exato"              color={color} />
-        <KpiCard label="Throughput médio"         value={avgThroughput}  sub="itens / sprint (fechadas)"            color={color} />
-        <KpiCard label="Conclusão média"          value={`${avgConclusao}%`} sub="sprints fechadas"                color={color} />
-        <KpiCard label="Time ativo"               value={teamSize}       sub="devs com itens atribuídos"            color="#888"  />
-        {kpiSprint && <KpiCard label={`Sprint ativa ${shortSprint(kpiSprint.name)}`} value={`${+(kpiSprint.completion_rate * 100).toFixed(0)}%`} sub={`${kpiSprint.done}/${kpiSprint.total} concluídos`} color={color} />}
+        <KpiCard label="Itens entregues (acum.)" value={cumulative}          sub="throughput total"                     color={color} />
+        <KpiCard label="Throughput médio"         value={avgThroughput}       sub="itens / sprint (fechadas)"            color={color} />
+        <KpiCard label="Conclusão média"          value={`${avgConclusao}%`}  sub="sprints fechadas"                     color={color} />
+        <KpiCard label="SP entregues (acum.)"     value={totalSp}             sub="story points totais"                  color={color} />
+        {kpiSprint && <KpiCard label={`Sprint ${shortSprint(kpiSprint.name)}`} value={`${+(kpiSprint.completion_rate * 100).toFixed(0)}%`} sub={`${kpiSprint.done}/${kpiSprint.total} concluídos`} color={color} />}
       </div>
 
       {/* Gráficos históricos */}
@@ -269,18 +526,8 @@ function ProjectTab({ projKey, data }) {
               </ResponsiveContainer>
             </Card>
 
-            <Card title="Story Points Entregues" color={color}>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
-                  <XAxis dataKey="sprint" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="SP Entregues" radius={[5, 5, 0, 0]}>
-                    {chartData.map((_, i) => <Cell key={i} fill={color} fillOpacity={0.5 + (i / chartData.length) * 0.5} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <Card title="Story Points Acumulados" color={color}>
+              <CumulativeSpChart sprints={sprints} color={color} />
             </Card>
 
             <Card title="Taxa de Conclusão (%)" color={color}>
@@ -296,6 +543,31 @@ function ProjectTab({ projKey, data }) {
             </Card>
 
           </div>
+        </div>
+      )}
+
+      {/* Distribuição por tipo */}
+      {sprints.some(s => s.by_type && Object.keys(s.by_type).length > 0) && (
+        <div>
+          <SectionTitle label="Distribuição por Tipo de Issue" color={color} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px,1fr))', gap: 14 }}>
+            <Card title="Tipos (acumulado sprints fechadas)" color={color}>
+              <IssueTypeDonut sprints={sprints} color={color} />
+            </Card>
+            <Card title="Histórico de Sprints" color={color}>
+              <SprintHistoryTable sprints={sprints} color={color} />
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Pricing: breakdown por squad */}
+      {projKey === 'CRPR' && (
+        <div>
+          <SectionTitle label="Breakdown por Squad" color={color} />
+          <Card title="" color={color}>
+            <PricingSquadsSection data={data} color={color} />
+          </Card>
         </div>
       )}
 
@@ -383,7 +655,6 @@ function ComparisonTable({ data }) {
 
 // ── Aba consolidada ────────────────────────────────────────────────────────────
 function ConsolidadoTab({ data }) {
-  // alinha sprints pelo nome curto para os gráficos multi-linha
   const allLabels = [...new Set(
     PROJ_ORDER.flatMap(k => (data[k]?.sprints || []).map(s => shortSprint(s.name)))
   )].sort();

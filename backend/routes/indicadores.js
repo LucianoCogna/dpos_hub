@@ -38,7 +38,7 @@ async function getSprints(boardId) {
 
 async function getSprintIssues(boardId, sprintId) {
   const base    = process.env.JIRA_BASE_URL;
-  const fields  = `summary,status,issuetype,${SP_FIELD},assignee`;
+  const fields  = `summary,status,issuetype,${SP_FIELD},assignee,labels`;
   const all     = [];
   let startAt   = 0;
   for (let page = 0; page < 15; page++) {
@@ -64,6 +64,8 @@ function analyzeIssues(issues) {
   const byType     = {};
   const byTypeDone = {};
   const byAssignee = {};
+  const byLabel    = {};
+  const byLabelDone = {};
 
   for (const issue of issues) {
     const f        = issue.fields || {};
@@ -72,6 +74,7 @@ function analyzeIssues(issues) {
     const assignee = f.assignee?.displayName || 'Sem atribuição';
     const sp       = typeof f[SP_FIELD] === 'number' ? f[SP_FIELD] : 0;
     const isDone   = cat === DONE_CAT;
+    const labels   = Array.isArray(f.labels) ? f.labels : [];
 
     total++;
     if (isDone) done++;
@@ -88,6 +91,12 @@ function analyzeIssues(issues) {
     if (!byAssignee[assignee]) byAssignee[assignee] = { total: 0, done: 0 };
     byAssignee[assignee].total++;
     if (isDone) byAssignee[assignee].done++;
+
+    for (const lbl of labels) {
+      if (!byLabel[lbl]) { byLabel[lbl] = 0; byLabelDone[lbl] = 0; }
+      byLabel[lbl]++;
+      if (isDone) byLabelDone[lbl]++;
+    }
   }
 
   return {
@@ -100,6 +109,8 @@ function analyzeIssues(issues) {
     by_type:          byType,
     by_type_done:     byTypeDone,
     by_assignee:      byAssignee,
+    by_label:         byLabel,
+    by_label_done:    byLabelDone,
   };
 }
 
@@ -127,15 +138,17 @@ async function buildProjectData(projKey, cfg) {
   // burndown da sprint ativa
   const activeSprint = sprintResults.find(s => s.state === 'active') || null;
   const burndown = activeSprint ? {
-    sprint:       activeSprint.name,
-    start:        activeSprint.start,
-    end:          activeSprint.end,
-    total:        activeSprint.total,
-    done:         activeSprint.done,
-    remaining:    activeSprint.total - activeSprint.done,
-    by_type:      activeSprint.by_type,
-    by_type_done: activeSprint.by_type_done,
-    by_assignee:  activeSprint.by_assignee,
+    sprint:        activeSprint.name,
+    start:         activeSprint.start,
+    end:           activeSprint.end,
+    total:         activeSprint.total,
+    done:          activeSprint.done,
+    remaining:     activeSprint.total - activeSprint.done,
+    by_type:       activeSprint.by_type,
+    by_type_done:  activeSprint.by_type_done,
+    by_assignee:   activeSprint.by_assignee,
+    by_label:      activeSprint.by_label,
+    by_label_done: activeSprint.by_label_done,
   } : null;
 
   // contribuição por dev agregando todas as sprints coletadas
