@@ -463,6 +463,90 @@ function PricingSquadsSection({ data, color }) {
         </Card>
       )}
 
+      {/* Pontuação de devs na sprint ativa */}
+      {activeSprint?.by_label_assignee?.[activeSquad] && (() => {
+        const devMap = activeSprint.by_label_assignee[activeSquad];
+        const devData = Object.entries(devMap)
+          .map(([nome, c]) => ({
+            nome:         nome.split(' ').slice(0, 2).join(' '),
+            nomeCompleto: nome,
+            Entregues:    c.done,
+            Pendentes:    c.total - c.done,
+            total:        c.total,
+          }))
+          .sort((a, b) => b.Entregues - a.Entregues);
+        if (!devData.length) return null;
+        return (
+          <Card title={`Pontuação por Dev — Sprint Ativa · ${squad.label}`} color={squad.color}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px,1fr))', gap: 14 }}>
+              {/* Gráfico horizontal */}
+              <ResponsiveContainer width="100%" height={Math.max(120, devData.length * 36)}>
+                <BarChart data={devData} layout="vertical" margin={{ top: 0, right: 36, bottom: 0, left: 4 }}>
+                  <XAxis type="number" tick={{ fontSize: 9 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={90} />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const row = devData.find(d => d.nome === label);
+                      return (
+                        <div style={{ background: '#1a1a2e', color: '#f9fafb', borderRadius: 10, padding: '10px 14px', fontSize: 12 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 4 }}>{row?.nomeCompleto || label}</div>
+                          {payload.map(p => (
+                            <div key={p.name} style={{ color: p.fill === '#e5e7eb' ? '#aaa' : squad.color }}>
+                              {p.name}: <strong>{p.value}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="Entregues" stackId="a" fill={squad.color} radius={[0, 0, 0, 0]}>
+                    <LabelList dataKey="Entregues" position="insideRight" style={{ fontSize: 9, fill: '#fff', fontWeight: 700 }} formatter={v => v > 0 ? v : ''} />
+                  </Bar>
+                  <Bar dataKey="Pendentes" stackId="a" fill="#e5e7eb" radius={[0, 4, 4, 0]}>
+                    <LabelList dataKey="Pendentes" position="right" style={{ fontSize: 9, fill: '#999' }} formatter={v => v > 0 ? v : ''} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+
+              {/* Cards de dev */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {devData.map((d, i) => {
+                  const rate = d.total > 0 ? Math.round((d.Entregues / d.total) * 100) : 0;
+                  return (
+                    <div key={d.nomeCompleto} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      background: i % 2 === 0 ? '#fafafa' : '#fff',
+                      borderRadius: 8, padding: '8px 12px',
+                      border: `1px solid ${squad.color}18`,
+                    }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%', background: squad.color,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0,
+                      }}>
+                        {d.nome.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a2e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.nomeCompleto}</div>
+                        <div style={{ height: 5, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden', marginTop: 4 }}>
+                          <div style={{ height: '100%', width: `${rate}%`, background: squad.color, borderRadius: 99 }} />
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: squad.color }}>{d.Entregues}</div>
+                        <div style={{ fontSize: 10, color: '#999' }}>de {d.total}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
+
     </div>
   );
 }

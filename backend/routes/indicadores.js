@@ -64,8 +64,9 @@ function analyzeIssues(issues) {
   const byType     = {};
   const byTypeDone = {};
   const byAssignee = {};
-  const byLabel    = {};
-  const byLabelDone = {};
+  const byLabel         = {};
+  const byLabelDone     = {};
+  const byLabelAssignee = {};
 
   for (const issue of issues) {
     const f        = issue.fields || {};
@@ -96,6 +97,11 @@ function analyzeIssues(issues) {
       if (!byLabel[lbl]) { byLabel[lbl] = 0; byLabelDone[lbl] = 0; }
       byLabel[lbl]++;
       if (isDone) byLabelDone[lbl]++;
+
+      if (!byLabelAssignee[lbl]) byLabelAssignee[lbl] = {};
+      if (!byLabelAssignee[lbl][assignee]) byLabelAssignee[lbl][assignee] = { total: 0, done: 0 };
+      byLabelAssignee[lbl][assignee].total++;
+      if (isDone) byLabelAssignee[lbl][assignee].done++;
     }
   }
 
@@ -109,8 +115,9 @@ function analyzeIssues(issues) {
     by_type:          byType,
     by_type_done:     byTypeDone,
     by_assignee:      byAssignee,
-    by_label:         byLabel,
-    by_label_done:    byLabelDone,
+    by_label:          byLabel,
+    by_label_done:     byLabelDone,
+    by_label_assignee: byLabelAssignee,
   };
 }
 
@@ -147,8 +154,9 @@ async function buildProjectData(projKey, cfg) {
     by_type:       activeSprint.by_type,
     by_type_done:  activeSprint.by_type_done,
     by_assignee:   activeSprint.by_assignee,
-    by_label:      activeSprint.by_label,
-    by_label_done: activeSprint.by_label_done,
+    by_label:          activeSprint.by_label,
+    by_label_done:     activeSprint.by_label_done,
+    by_label_assignee: activeSprint.by_label_assignee,
   } : null;
 
   // contribuição por dev agregando todas as sprints coletadas
