@@ -14,8 +14,8 @@ const PROJ = {
 const PROJ_ORDER = ['CRPR', 'CRVE', 'CRMI'];
 
 const PRICING_SQUADS = [
-  { key: 'dev_pricing',   label: 'Dev',   color: '#5521B5' },
-  { key: 'dados_pricing', label: 'Dados', color: '#7c3aed' },
+  { key: 'Dev_pricing',   label: 'Dev',   color: '#5521B5' },
+  { key: 'Dados_pricing', label: 'Dados', color: '#7c3aed' },
   { key: 'DS_pricing',    label: 'DS',    color: '#a78bfa' },
 ];
 
